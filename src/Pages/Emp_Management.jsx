@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import Header from "../Components/Header";
-import Profile from "../assets/profileImg.jpg";
+import Profile from "../assets/ProfileImg.jpg";
 import { employeesApi } from "../services/employeesAPI";
 
 export default function Emp_Management() {
