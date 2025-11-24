@@ -5,6 +5,7 @@ import TextField from "../Components/TextField"
 import { useState, useEffect } from "react";
 import { employeesApi } from "../services/employeesAPI";
 import { worktimeApi } from "../services/worktimeAPI";
+import { API_BASE_URL } from "../services/config";
 
 // Function to calculate work hours, late minutes, and overtime
 function calculateWorkTime(shiftStart, shiftEnd, clockIn, clockOut) {
@@ -43,7 +44,7 @@ function ClockInPage() {
         const updatedShifts = {};
         await Promise.all(
           employees.map(async (emp) => {
-            const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${currentDate}`);
+            const res = await fetch(`${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${currentDate}`);
             if (!res.ok) return;
             const data = await res.json();
             if (data.shift_id) updatedShifts[emp.num] = data.shift_id.toString();
@@ -103,7 +104,7 @@ function ClockInPage() {
           transformedEmployees.map(async emp => {
             try {
               console.log(`Fetching shift for employee ${emp.num} on date ${today}`);
-              const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
+              const res = await fetch(`${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${today}`);
               if (!res.ok) return { ...emp, shift: 0 };
               const data = await res.json();
               return { ...emp, shift: data.shift_id || 0 };
@@ -142,7 +143,7 @@ function ClockInPage() {
     const updated = await Promise.all(
       employeesList.map(async (emp) => {
         try {
-          const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
+          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${today}`);
           if (!res.ok) throw new Error("No planned shift");
           const data = await res.json();
           return {

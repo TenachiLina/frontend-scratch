@@ -1,10 +1,11 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+// const API_BASE_URL = 'http://localhost:3001/api';
+import { API_BASE_URL } from './config';
 
 export const planningApi = {
   // Save planning data
   savePlanning: async (planningData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning/save`, {
+      const response = await fetch(`${API_BASE_URL}/api/planning/save`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -25,7 +26,7 @@ export const planningApi = {
   // Get planning for a specific date
   getPlanning: async (date) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning?date=${date}`);
+      const response = await fetch(`${API_BASE_URL}/api/planning?date=${date}`);
       
       if (!response.ok) {
         throw new Error('Failed to fetch planning');
@@ -40,7 +41,7 @@ export const planningApi = {
   // Update individual assignment
   updateAssignment: async (assignmentData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning/assignment`, {
+      const response = await fetch(`${API_BASE_URL}/api/planning/assignment`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -61,7 +62,7 @@ export const planningApi = {
   // Get available shifts
   getShifts: async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning/shifts`);
+      const response = await fetch(`${API_BASE_URL}/api/planning/shifts`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch shifts');
@@ -76,7 +77,7 @@ export const planningApi = {
   // Get available tasks
   getTasks: async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning/tasks`);
+      const response = await fetch(`${API_BASE_URL}/api/planning/tasks`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch tasks');
@@ -90,7 +91,7 @@ export const planningApi = {
   // ✅ Get all employees for the planning page
   getEmployees: async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/employees`);
+      const response = await fetch(`${API_BASE_URL}/api/employees`);
 
       if (!response.ok) {
         throw new Error('Failed to fetch employees');
@@ -108,7 +109,7 @@ export const planningApi = {
     // ✅ Delete one employee from planning (planning + worktime)
   deleteFromPlanning: async (deleteData) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/planning/delete`, {
+      const response = await fetch(`${API_BASE_URL}/api/planning/delete`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

@@ -1,11 +1,13 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+// const API_BASE_URL = 'http://localhost:3001/api';
+import { API_BASE_URL } from './config';
+
 
 export const employeesApi = {
 
   async getEmployees() {
     try {
-      console.log("🟢 Fetching employees from:", `${API_BASE_URL}/employees`);
-      const response = await fetch(`${API_BASE_URL}/employees`);
+      console.log("🟢 Fetching employees from:", `${API_BASE_URL}/api/employees`);
+      const response = await fetch(`${API_BASE_URL}/api/employees`);
 
       console.log("🟡 Response status:", response.status);
       const text = await response.text();
@@ -25,7 +27,7 @@ export const employeesApi = {
 
   async deleteEmployee(employeeId) {
     try {
-      const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}`, {
         method: 'DELETE',
       });
 
@@ -55,7 +57,7 @@ export const employeesApi = {
     formData.append("phone_number", employeeData.phone_number);
     
     
-    const response = await fetch(`${API_BASE_URL}/employees`, {
+    const response = await fetch(`${API_BASE_URL}/api/employees`, {
       method: "POST",
       body: formData, // ✅ no JSON, no headers
     });
@@ -83,7 +85,7 @@ async updateEmployee(employeeId, employeeData) {
     formData.append("address", employeeData.address);
     formData.append("phone_number", employeeData.phone_number);
 
-    const response = await fetch(`${API_BASE_URL}/employees/${employeeId}`, {
+    const response = await fetch(`${API_BASE_URL}/api/employees/${employeeId}`, {
       method: "PUT",
       body: formData,
     });
