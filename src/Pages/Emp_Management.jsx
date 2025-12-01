@@ -3,12 +3,15 @@ import Header from "../Components/Header";
 import Profile from "../assets/ProfileImg.jpg";
 import { employeesApi } from "../services/employeesAPI";
 
+// Module-level cache (persists while the tab is open)
+let employeesCache = null;
+
 export default function Emp_Management() {
   const [showForm, setShowForm] = useState(false);
-  
+
   const [employees, setEmployees] = useState([]);
-  const [isEditing, setIsEditing] = useState(false);   
-  const [editingId, setEditingId] = useState(null);    
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingId, setEditingId] = useState(null);
 
   const [employeeForm, setEmployeeForm] = useState({
     personal_image: null,
@@ -20,6 +23,12 @@ export default function Emp_Management() {
   });
 
   useEffect(() => {
+    // If we have cache in this session, use it and skip network call
+    if (employeesCache) {
+      setEmployees(employeesCache);
+      return;
+    }
+    // otherwise fetch from API
     fetchEmployees();
   }, []);
 
@@ -27,6 +36,7 @@ export default function Emp_Management() {
     try {
       const data = await employeesApi.getEmployees();
       setEmployees(data);
+      employeesCache = data; // store in module-level cache
     } catch (error) {
       alert("❌ Failed to load employees");
     }
@@ -43,11 +53,22 @@ export default function Emp_Management() {
   async function handleSave() {
     try {
       if (isEditing) {
-        // ✅ Editing existing employee
-        await employeesApi.updateEmployee(editingId, employeeForm);
-        alert("✅ Employee updated successfully");
+        // Update existing employee on server
+        const updated = await employeesApi.updateEmployee(editingId, employeeForm);
+        //Tell the reporting page After adding or deleting
+        localStorage.setItem("employees_updated", Date.now()); // just a timestamp
+
+
+        // Update local state & cache:
+        setEmployees((prev) => {
+          const newList = prev.map((emp) =>
+            emp.emp_id === editingId ? (updated && updated.emp_id ? updated : { ...emp, ...employeeForm }) : emp
+          );
+          employeesCache = newList;
+          return newList;
+        });
       } else {
-        // ✅ Check for duplicates
+        // Check for duplicates locally first
         const isDuplicate = employees.some(
           (emp) =>
             emp.name.trim().toLowerCase() === employeeForm.name.trim().toLowerCase() &&
@@ -56,19 +77,31 @@ export default function Emp_Management() {
 
         if (isDuplicate) {
           alert("⚠️ This employee already exists in the table!");
-          return; // Stop saving
+          return;
         }
 
-        // ✅ Adding new employee
-        await employeesApi.addEmployee(employeeForm);
-        alert("✅ Employee added successfully");
+        // Add on server
+        const created = await employeesApi.addEmployee(employeeForm);
+         //Tell the reporting page After adding or deleting
+        localStorage.setItem("employees_updated", Date.now()); // just a timestamp
+
+        // If API returned created employee, append it. Otherwise fallback to re-fetch.
+        if (created && created.emp_id) {
+          setEmployees((prev) => {
+            const newList = [...prev, created];
+            employeesCache = newList;
+            return newList;
+          });
+        } else {
+          // safe fallback: re-fetch from server and update cache (should be rare)
+          await fetchEmployees();
+        }
       }
 
+      // Reset UI
       setShowForm(false);
       setIsEditing(false);
       setEditingId(null);
-
-      // ✅ Reset form
       setEmployeeForm({
         personal_image: null,
         name: "",
@@ -77,26 +110,32 @@ export default function Emp_Management() {
         address: "",
         phone_number: "",
       });
-
-      fetchEmployees(); // ✅ refresh table
     } catch (error) {
+      console.error(error);
       alert("❌ Failed to save employee");
     }
   }
 
-  // ✅ DELETE
+  // DELETE
   async function handleDelete(emp_id) {
-    if (!window.confirm("Are you sure you want to delete this employee?")) return;
     try {
       await employeesApi.deleteEmployee(emp_id);
-      alert("✅ Employee deleted");
-      setEmployees((prev) => prev.filter((e) => e.emp_id !== emp_id));
-    } catch {
+      //Tell the reporting page After adding or deleting
+      localStorage.setItem("employees_updated", Date.now()); // just a timestamp
+
+      // Update local state and cache
+      setEmployees((prev) => {
+        const newList = prev.filter((e) => e.emp_id !== emp_id);
+        employeesCache = newList;
+        return newList;
+      });
+    } catch (error) {
+      console.error(error);
       alert("❌ Failed to delete employee");
     }
   }
 
-  // ✅ EDIT FUNCTION
+  // EDIT
   function handleEdit(emp) {
     setIsEditing(true);
     setEditingId(emp.emp_id);
@@ -192,7 +231,7 @@ export default function Emp_Management() {
           </table>
         </div>
 
-        {/* ✅ Drawer Form */}
+        {/* Drawer Form */}
         {showForm && (
           <div className="drawer">
             <div className="drawer-content">
@@ -200,52 +239,22 @@ export default function Emp_Management() {
 
               <form onSubmit={(e) => e.preventDefault()}>
                 <label>Personal Image:</label>
-                <input
-                  type="file"
-                  name="personal_image"
-                  accept="image/*"
-                  onChange={handleChange}
-                />
+                <input type="file" name="personal_image" accept="image/*" onChange={handleChange} />
 
                 <label>Name:</label>
-                <input
-                  type="text"
-                  name="name"
-                  value={employeeForm.name}
-                  onChange={handleChange}
-                />
+                <input type="text" name="name" value={employeeForm.name} onChange={handleChange} />
 
                 <label>Salary Per Hour:</label>
-                <input
-                  type="number"
-                  name="Total_hours"
-                  value={employeeForm.Total_hours}
-                  onChange={handleChange}
-                />
+                <input type="number" name="Total_hours" value={employeeForm.Total_hours} onChange={handleChange} />
 
                 <label>Base Salary:</label>
-                <input
-                  type="number"
-                  name="Base_salary"
-                  value={employeeForm.Base_salary}
-                  onChange={handleChange}
-                />
+                <input type="number" name="Base_salary" value={employeeForm.Base_salary} onChange={handleChange} />
 
                 <label>Address:</label>
-                <input
-                  type="text"
-                  name="address"
-                  value={employeeForm.address}
-                  onChange={handleChange}
-                />
+                <input type="text" name="address" value={employeeForm.address} onChange={handleChange} />
 
                 <label>Phone:</label>
-                <input
-                  type="text"
-                  name="phone_number"
-                  value={employeeForm.phone_number}
-                  onChange={handleChange}
-                />
+                <input type="text" name="phone_number" value={employeeForm.phone_number} onChange={handleChange} />
 
                 <div className="form-actions">
                   <button type="button" onClick={() => setShowForm(false)}>
