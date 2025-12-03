@@ -30,6 +30,12 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   };
 
+const [manualInput, setManualInput] = useState({
+  employee: null,
+  type: null,      // "clockIn" or "clockOut"
+  value: ""
+});
+
   // State for employee times with localStorage persistence
   const [employeeTimes, setEmployeeTimes] = useState(() => {
     const defaultTimes = {};
@@ -124,6 +130,47 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
       return hasChanges ? updatedTimes : prev;
     });
   }, [employees]);
+
+
+// Open the popup to manually edit a time
+const openManualInput = (employeeNum, type) => {
+const existingValue = employeeTimes[employeeNum]?.[type] || "";
+
+  setManualInput({
+    employee: employeeNum,
+    type: type,
+    value: existingValue
+  });
+};
+
+// Save the edited manual time
+const saveManualTime = () => {
+  const { employee, type, value } = manualInput;
+
+  if (!value.match(/^\d{2}:\d{2}$/)) {
+    alert("Invalid time format. Use HH:MM");
+    return;
+  }
+
+  const updatedTimes = {
+  ...employeeTimes[employee],
+  [type]: value
+};
+
+setEmployeeTimes(prev => ({
+  ...prev,
+  [employee]: updatedTimes
+}));
+
+
+  // If both are filled, auto-save
+  if (updatedTimes.clockIn && updatedTimes.clockOut && updatedTimes.clockIn !== "00:00" && updatedTimes.clockOut !== "00:00") {
+    saveWorkTimeToDB(employee, updatedTimes.clockIn, updatedTimes.clockOut, updatedTimes.workTimeId || null);
+  }
+
+  // Close popup
+  setManualInput({ employee: null, type: null, value: "" });
+};
 
   // Calculate if employee is late
   const calculateLateMinutes = (clockIn, shiftNumber) => {
@@ -451,6 +498,20 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
                     >
                       Clock In<br />{currentClockIn}
                     </button>
+<button
+  style={{
+    marginTop: "3px",
+    background: "#ffc107",
+    color: "black",
+    padding: "4px 6px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    width: "100%"
+  }}
+  onClick={() => openManualInput(emp.num, "clockIn")}
+>
+  Edit Clock In
+</button>
                   </td>
                   <td>
                     <button
@@ -469,6 +530,21 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
                     >
                       Clock Out<br />{currentClockOut}
                     </button>
+<button
+  style={{
+    marginTop: "3px",
+    background: "#ffc107",
+    color: "black",
+    padding: "4px 6px",
+    borderRadius: "4px",
+    cursor: "pointer",
+    width: "100%"
+  }}
+  onClick={() => openManualInput(emp.num, "clockOut")}
+>
+  Edit Clock Out
+</button>
+
                   </td>
                 {/*  <td>
                     <div style={{ 
@@ -541,6 +617,68 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
           </tbody>
         </table>
       </div>
+{manualInput.employee && (
+  <div
+    style={{
+      position: "fixed",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      background: "white",
+      padding: "20px",
+      borderRadius: "8px",
+      boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+      zIndex: 9999
+    }}
+  >
+    <h3>
+      Edit {manualInput.type === "clockIn" ? "Clock-In" : "Clock-Out"} Time
+    </h3>
+
+    <input
+      type="time"
+      value={manualInput.value}
+      onChange={(e) =>
+        setManualInput(prev => ({ ...prev, value: e.target.value }))
+      }
+      style={{
+        fontSize: "18px",
+        padding: "6px",
+        width: "140px",
+        marginTop: "10px"
+      }}
+    />
+
+    <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+      <button
+        onClick={saveManualTime}
+        style={{
+          padding: "8px 12px",
+          background: "#28a745",
+          color: "white",
+          borderRadius: "4px"
+        }}
+      >
+        Save
+      </button>
+
+      <button
+        onClick={() =>
+          setManualInput({ employee: null, type: null, value: "" })
+        }
+        style={{
+          padding: "8px 12px",
+          background: "#dc3545",
+          color: "white",
+          borderRadius: "4px"
+        }}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
     </>
   );
 }
