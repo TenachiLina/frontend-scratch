@@ -1,14 +1,103 @@
 import { useState, useEffect } from "react"; 
 import { worktimeApi } from "../services/worktimeAPI";
+import { shiftApi } from "../services/shfitAPI.js"; 
 
 export default function Content({ employees, selectedShifts, setSelectedShifts, onEmployeeDeleted }) {
-  const shiftTimes = {
-    1: { start: "06:00", end: "14:00" },
-    2: { start: "08:00", end: "16:00" },
-    3: { start: "16:00", end: "00:00" }
-  };
+// <<<<<<< HEAD
+//   const shiftTimes = {
+//     1: { start: "06:00", end: "14:00" },
+//     2: { start: "08:00", end: "16:00" },
+//     3: { start: "16:00", end: "00:00" }
+//   };
 
-  const [currentTab, setCurrentTab] = useState(1);
+//   const [currentTab, setCurrentTab] = useState(1);
+// =======
+  const [shifts, setShifts] = useState([]);
+  const [currentTab, setCurrentTab] = useState(null);
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
+
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingShift, setEditingShift] = useState(null);
+
+  // Load shifts from backend on page load
+  useEffect(() => {
+    const fetchShifts = async () => {
+      const data = await shiftApi.getShifts();
+      setShifts(data);
+      if (data.length > 0) setCurrentTab(data[0].shift_id);
+    };
+    fetchShifts();
+  }, []);
+
+  // DELETE SHIFT
+  const handleDeleteShift = async (shiftId) => {
+    if (!window.confirm("Are you sure you want to delete this shift?")) return;
+    console.log("HELLLLLLLO",shiftId)
+
+    const deleted = await shiftApi.deleteShift(shiftId);
+    if (!deleted) return;
+
+    // Update UI: remove deleted shift
+    setShifts(shifts.filter((s) => s.shift_id !== shiftId));
+  };
+
+  const handleEditShift = (shift) => {
+  setEditingShift(shift);     // preload form
+  setShowAddForm(true);       // open the same form
+  };
+
+  const handleSubmitEditShift = async (e) => {
+  e.preventDefault();
+  if (!editingShift) return;
+
+  const updated = await shiftApi.updateShift(editingShift.shift_id, {
+    start_time: editingShift.start_time,
+    end_time: editingShift.end_time,
+  });
+
+  if (!updated) return;
+
+  setShifts(shifts.map((s) => s.shift_id === editingShift.shift_id ? updated : s));
+
+
+  setEditingShift(null);
+  setShowAddForm(false);
+  };
+
+  // const handleSubmitShift = async (e) => {
+  // e.preventDefault();
+
+  // const added = await shiftApi.addShift(newShift);
+  // if (!added) return;
+
+  // setShifts([...shifts, added]);
+
+  // setShowAddForm(false);
+  // setNewShift({ start_time: "", end_time: "" });
+  // };
+  const handleSubmitShift = async (e) => {
+  e.preventDefault();
+
+  const added = await shiftApi.addShift(newShift);
+  if (!added) return;
+
+  // Add the new shift and sort by start_time
+  const updatedShifts = [...shifts, added].sort((a, b) => {
+    const timeToMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+    return timeToMinutes(a.start_time) - timeToMinutes(b.start_time);
+  });
+
+  setShifts(updatedShifts);
+  setShowAddForm(false);
+  setNewShift({ start_time: "", end_time: "" });
+};
+
+// >>>>>>> 598e0ba (Save local changes before pull)
 
   // Load from localStorage on component mount
   const loadFromLocalStorage = (key, defaultValue) => {
@@ -379,69 +468,209 @@ setEmployeeTimes(prev => ({
     return employeeTimes[employeeNum]?.[type] || "00:00";
   };
 
-  // Get display values for delay and overtime
-  const getDisplayDelay = (employeeNum) => {
-    const clockIn = getEmployeeTime(employeeNum, 'clockIn');
-    const shiftNumber = currentTab; 
-    const lateMinutes = calculateLateMinutes(clockIn, shiftNumber);
-    return formatMinutesToTime(lateMinutes);
-  };
+  
 
-  const getDisplayOvertime = (employeeNum) => {
-    const clockOut = getEmployeeTime(employeeNum, 'clockOut');
-    const shiftNumber = currentTab; 
-    const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
-    return formatMinutesToTime(overtimeMinutes);
-  };
+  // Get display values for delay and overtime
+  const getDisplayDelay = (employeeNum) => {
+    const clockIn = getEmployeeTime(employeeNum, 'clockIn');
+    const shiftNumber = parseInt(selectedShifts[employeeNum]);
+    const lateMinutes = calculateLateMinutes(clockIn, shiftNumber);
+    return formatMinutesToTime(lateMinutes);
+  };
 
-  return (
-    <>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "flex-start",
-          alignItems: "center",
-          color: "black",
-          fontSize: "20px",
-          marginLeft: "35px",
-          marginTop: "40px",
-          marginBottom: "0px"
-        }}
-      >
-        Enter clock in/out and shift number:
-      
-      <button
-        className="newDay"
-        onClick={clearLocalData}
-      >
-         Clear local data
-      </button>
+  const getDisplayOvertime = (employeeNum) => {
+    const clockOut = getEmployeeTime(employeeNum, 'clockOut');
+    const shiftNumber = parseInt(selectedShifts[employeeNum]);
+    const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
+    return formatMinutesToTime(overtimeMinutes);
+  };
 
-      </div>
-<div style={{ display: "flex", gap: "10px", marginLeft: "35px", marginTop: "20px" }}>
-  {[1, 2, 3].map((shift) => (
-    <button
-      key={shift}
-      onClick={() => setCurrentTab(shift)}
-      style={{
-        padding: "10px 20px",
-        borderRadius: "8px",
-        border: "none",
-        cursor: "pointer",
-        backgroundColor: currentTab === shift ? "#007bff" : "#ccc",
-        color: "white",
-        fontWeight: "bold",
-      }}
-    >
-      Shift {shift} ({shiftTimes[shift].start} - {shiftTimes[shift].end})
-    </button>
-  ))}
-</div>
+  return (
+    <>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-start",
+          alignItems: "center",
+          color: "black",
+          fontSize: "20px",
+          marginLeft: "35px",
+          marginTop: "40px",
+          marginBottom: "0px"
+        }}
+      >
+        Enter clock in/out and shift number:
+      
+      <button
+        className="newDay"
+        onClick={clearLocalData}
+      >
+         Clear local data
+      </button>
 
-      <div>
-        <table border="1" cellPadding="20" cellSpacing="0">
-          <thead>
-            <tr>
+    </div>
+      <div style={{ marginLeft: "35px", marginTop: "20px" }}>
+        <div style={{ marginLeft: "35px", marginTop: "20px" }}>
+          {/* ADD SHIFT button */}
+          <button
+            onClick={() => {
+              setNewShift({ start_time: "", end_time: "" }); // reset
+              setEditingShift(null);                         // ensure no edit mode
+              setShowAddForm(true);
+            }}
+            style={{
+              padding: "10px 15px",
+              marginBottom: "15px",
+              borderRadius: "8px",
+              fontWeight: "bold",
+              backgroundColor: "#28a745",
+              color: "white",
+              border: "none",
+              cursor: "pointer",
+            }}
+          >
+            + ADD SHIFT
+          </button>
+
+          {/* ADD + EDIT Shift Form (same form) */}
+          {showAddForm && (
+            <form
+              onSubmit={editingShift ? handleSubmitEditShift : handleSubmitShift}
+              style={{
+                display: "flex",
+                gap: "10px",
+                marginBottom: "20px",
+              }}
+            >
+              <input
+                type="time"
+                required
+                value={
+                  editingShift ? editingShift.start_time : newShift.start_time
+                }
+                onChange={(e) => {
+                  if (editingShift) {
+                    setEditingShift({
+                      ...editingShift,
+                      start_time: e.target.value,
+                    });
+                  } else {
+                    setNewShift({
+                      ...newShift,
+                      start_time: e.target.value,
+                    });
+                  }
+                }}
+              />
+
+              <input
+                type="time"
+                required
+                value={
+                  editingShift ? editingShift.end_time : newShift.end_time
+                }
+                onChange={(e) => {
+                  if (editingShift) {
+                    setEditingShift({
+                      ...editingShift,
+                      end_time: e.target.value,
+                    });
+                  } else {
+                    setNewShift({
+                      ...newShift,
+                      end_time: e.target.value,
+                    });
+                  }
+                }}
+              />
+
+              <button
+                type="submit"
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "linear-gradient(to right, #FAB12F, #FA812F)",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                {editingShift ? "Update" : "Save"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddForm(false);
+                  setEditingShift(null);
+                  setNewShift({ start_time: "", end_time: "" });
+                }}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: "8px",
+                  border: "none",
+                  backgroundColor: "#6c757d",
+                  color: "white",
+                  cursor: "pointer",
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          )}
+
+          {/* SHIFTS LIST */}
+          <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+            {console.log("SHIFTS:", shifts)}
+            {shifts.map((shift) => (
+              <div key={shift.shift_id} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                
+                <button className="newDay">
+                  Shift ({shift.start_time} - {shift.end_time})
+                </button>
+
+                {/* Edit */}
+                <button
+                  onClick={() => handleEditShift(shift)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: "5px",
+                    border: "none",
+                    backgroundColor: "#28a745",
+                    color: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  ✏️
+                </button>
+
+                {/* Delete */}
+                <button
+                  onClick={() => handleDeleteShift(shift.shift_id)}
+                  style={{
+                    padding: "5px 10px",
+                    borderRadius: "5px",
+                    border: "none",
+                    backgroundColor: "#dc3545",
+                    color: "white",
+                    cursor: "pointer",
+                  }}
+                >
+                  🗑️
+                </button>
+
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+
+      <div>
+        <table border="1" cellPadding="20" cellSpacing="0">
+          <thead>
+            <tr>
+
               {/* <th>Num</th> */}
               <th>Full name</th>
               <th>Clock in</th>
@@ -680,5 +909,5 @@ setEmployeeTimes(prev => ({
 )}
 
     </>
-  );
+);
 }

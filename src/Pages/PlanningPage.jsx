@@ -5,6 +5,8 @@ import { useState, useEffect, useRef } from "react"
 import ShiftsDropDownList from "../Components/ShiftDropDownList"
 import { employeesApi } from "../services/employeesAPI"
 import { planningApi } from "../services/planningAPI"
+import { shiftApi } from '../services/shfitAPI.js'; // adjust the path to match your project
+
 
 // ---------- Module-level session cache & in-flight tracker ----------
 let employeesCache = null;
@@ -12,46 +14,7 @@ let employeesCachePromise = null;
 // -------------------------------------------------------------------
 
 export default function Planning() {
-    const [isOpen, setIsOpen] = useState(false);
-    const [employees, setEmployees] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState(null);
-    const [saving, setSaving] = useState(false);
-    const [loadingPlanning, setLoadingPlanning] = useState(false);
-    const [activeTab, setActiveTab] = useState(0);
-    const [assignments, setAssignments] = useState({});
-    
-    const [copiedDay, setCopiedDay] = useState(null);
-    const [tick, setTick] = useState(0);
-
-    const [hoveredEmployee, setHoveredEmployee] = useState(null);
-    const [dropdownVisibleFor, setDropdownVisibleFor] = useState(null);
-
-
-    const planningDataRefs = useRef({});
-    const existingPlannings = useRef({});
-
-    const posts = [
-        { id: 1, name: "Pizzaiolo" },
-        { id: 2, name: "Livreur" },
-        { id: 3, name: "Agent polyvalent" },
-        { id: 4, name: "Prepateur" },
-        { id: 5, name: "Cassier" },
-        { id: 6, name: "Serveur" },
-        { id: 7, name: "Plongeur" },
-        { id: 8, name: "Manageur" },
-        { id: 9, name: "Packaging" },
-        { id: 10, name: "Topping" },
-        { id: 11, name: "Bar" }
-    ];
-
-    const shifts = [
-        { id: 1, name: "6:00-14:00 (1)", time: "6:00-14:00" },
-        { id: 2, name: "8:00-16:00 (2)", time: "8:00-16:00" },
-        { id: 3, name: "16:00-00:00 (3)", time: "16:00-00:00" }
-    ];
-
-    const getWeekDates = () => {
+     const getWeekDates = () => {
         const dates = [];
         const today = new Date();
         const currentDay = today.getDay();
@@ -67,6 +30,68 @@ export default function Planning() {
     };
 
     const [weekDates, setWeekDates] = useState(getWeekDates());
+
+    //NEWWWWWWWWWWWWWWWWW
+    // Returns the index of today's date inside the week array
+    const getTodayIndex = (week) => {
+        const todayStr = new Date().toISOString().split('T')[0];
+        return week.indexOf(todayStr);
+    };
+
+    const [isOpen, setIsOpen] = useState(false);
+    const [employees, setEmployees] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [saving, setSaving] = useState(false);
+    //NEWWWW
+    const [savingWeek, setSavingWeek] = useState(false);
+    const [loadingPlanning, setLoadingPlanning] = useState(false);
+    // const [activeTab, setActiveTab] = useState(0);
+    const [activeTab, setActiveTab] = useState(() => {
+    const idx = getTodayIndex(weekDates);
+    return idx !== -1 ? idx : 0;
+    });
+
+    const [assignments, setAssignments] = useState({});
+    
+    const [copiedDay, setCopiedDay] = useState(null);
+    const [tick, setTick] = useState(0);
+
+    const [hoveredEmployee, setHoveredEmployee] = useState(null);
+    const [dropdownVisibleFor, setDropdownVisibleFor] = useState(null);
+
+
+    const planningDataRefs = useRef({});
+    const existingPlannings = useRef({});
+
+    //Newwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww
+    const [copiedWeek, setCopiedWeek] = useState(null);
+
+
+    const posts = [
+        { id: 1, name: "Pizzaiolo" },
+        { id: 2, name: "Livreur" },
+        { id: 3, name: "Agent polyvalent" },
+        { id: 4, name: "Prepateur" },
+        { id: 5, name: "Cassier" },
+        { id: 6, name: "Serveur" },
+        { id: 7, name: "Plongeur" },
+        { id: 8, name: "Manageur" },
+        { id: 9, name: "Packaging" },
+        { id: 10, name: "Topping" },
+        { id: 11, name: "Bar" }
+    ];
+
+    // const shifts = [
+    //     { id: 1, name: "7:00-14:00 (1)", time: "6:00-14:00" },
+    //     { id: 2, name: "8:00-16:00 (2)", time: "8:00-16:00" },
+    //     { id: 3, name: "16:00-23:00 (3)", time: "16:00-00:00" }
+    // ];
+    const [shifts, setShifts] = useState([]);
+
+    //here was get week days.
+
+
     const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
     const getCurrentDate = () => weekDates[activeTab];
@@ -158,6 +183,56 @@ export default function Planning() {
         }
     }, [activeTab, employees]);
 
+    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    useEffect(() => {
+    if (!weekDates || weekDates.length === 0) return;
+
+    const idx = getTodayIndex(weekDates);
+    setActiveTab(idx !== -1 ? idx : 0);
+    }, [weekDates]);
+
+    // useEffect(() => {
+    // const loadShifts = async () => {
+    //     try {
+    //         const data = await shiftApi.getShifts();
+    //         // map shifts
+    //         setShifts(
+    //             data.map((s, index) => ({
+    //                 id: s.shift_id,
+    //                 //To ignore seconds part(16:00:00 > 16:00)
+    //                 name: `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`,
+    //                 time: `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`,
+    //             }))
+    //         );
+    //         console.log("Shifts loaded:", data);
+    //     } catch (err) {
+    //         console.error("Failed to fetch shifts:", err);
+    //     }
+    // };
+
+    //     loadShifts();
+    // }, []);
+    useEffect(() => {
+    const loadShifts = async () => {
+        try {
+            const data = await shiftApi.getShifts(); // fetch from backend
+
+            const formattedShifts = data.map((s, index) => ({
+                id: s.shift_id, // must match DB
+                name: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)} (${index + 1})`,
+                time: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)}` // optional if needed
+            }));
+
+            setShifts(formattedShifts);
+            console.log("💾 Loaded shifts:", formattedShifts); // debug
+        } catch (err) {
+            console.error("Failed to fetch shifts:", err);
+        }
+    };
+
+        loadShifts();
+    }, []);
+
     const loadExistingPlanningForTab = async (tabIndex) => {
         const date = weekDates[tabIndex];
         try {
@@ -201,6 +276,7 @@ export default function Planning() {
             setLoadingPlanning(false);
         }
     };
+
 
     const getFallbackEmployees = () => [
         { name: "Akram Dib", emp_id: 1 },
@@ -257,62 +333,126 @@ export default function Planning() {
         return [];
     };
 
-    const savePlanning = async () => {
-        const currentDate = getCurrentDate();
+    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    // const savePlanning = async (date, silent = false) => {
+    // const currentDate = date; // take the date passed in
 
-        try {
-            setSaving(true);
+    // try {
+    //     if (!silent) setSaving(true);
 
-            const dayData = planningDataRefs.current?.[currentDate] || {};
-            const planningArray = [];
+    //     const dayData = planningDataRefs.current?.[currentDate] || {};
+    //     const planningArray = [];
 
-            Object.entries(dayData).forEach(([key, employees]) => {
-                if (!employees) return;
+    //     Object.entries(dayData).forEach(([key, employees]) => {
+    //         if (!employees) return;
 
-                const [postId, shiftId] = key.split('-');
+    //         const [postId, shiftId] = key.split('-');
 
-                if (Array.isArray(employees)) {
-                    employees.forEach(emp => {
-                        if (emp?.emp_id) {
-                            planningArray.push({
-                                shift_id: parseInt(shiftId),
-                                emp_id: emp.emp_id,
-                                task_id: parseInt(postId),
-                                plan_date: currentDate,
-                            });
-                        }
-                    });
-                } else if (employees.emp_id) {
-                    planningArray.push({
-                        shift_id: parseInt(shiftId),
-                        emp_id: employees.emp_id,
-                        task_id: parseInt(postId),
-                        plan_date: currentDate,
-                    });
-                }
-            });
+    //         if (Array.isArray(employees)) {
+    //             employees.forEach(emp => {
+    //                 if (emp?.emp_id) {
+    //                     planningArray.push({
+    //                         shift_id: parseInt(shiftId),
+    //                         emp_id: emp.emp_id,
+    //                         task_id: parseInt(postId),
+    //                         plan_date: currentDate,
+    //                     });
+    //                 }
+    //             });
+    //         } else if (employees.emp_id) {
+    //             planningArray.push({
+    //                 shift_id: parseInt(shiftId),
+    //                 emp_id: employees.emp_id,
+    //                 task_id: parseInt(postId),
+    //                 plan_date: currentDate,
+    //             });
+    //         }
+    //     });
 
-            if (planningArray.length === 0) {
-                alert('No planning data to save!');
-                return;
+    //     if (planningArray.length === 0) {
+    //         if (!silent) alert("No planning to save!");
+    //         return;
+    //     }
+
+    //     await planningApi.savePlanning({
+    //         plan_date: currentDate,
+    //         assignments: planningArray,
+    //     });
+
+    //     if (!silent) {
+    //         alert(`Planning for ${formatDateDisplay(currentDate)} saved!`);
+    //     }
+
+    //     await loadExistingPlanningForTab(activeTab);
+
+    // } catch (err) {
+    //     console.error(err);
+    //     if (!silent) alert(err.message);
+    // } finally {
+    //     if (!silent) setSaving(false);
+    // }
+    // };
+    const savePlanning = async (date, silent = false) => {
+    const currentDate = date; 
+
+    try {
+        if (!silent) setSaving(true);
+
+        const dayData = planningDataRefs.current?.[currentDate] || {};
+        const planningArray = [];
+
+        Object.entries(dayData).forEach(([key, employees]) => {
+            if (!employees) return;
+
+            const [postId, shiftId] = key.split('-');
+
+            if (Array.isArray(employees)) {
+                employees.forEach(emp => {
+                    if (emp?.emp_id) {
+                        planningArray.push({
+                            shift_id: parseInt(shiftId),
+                            emp_id: emp.emp_id,
+                            task_id: parseInt(postId),
+                            plan_date: currentDate,
+                        });
+                    }
+                });
+            } else if (employees.emp_id) {
+                planningArray.push({
+                    shift_id: parseInt(shiftId),
+                    emp_id: employees.emp_id,
+                    task_id: parseInt(postId),
+                    plan_date: currentDate,
+                });
             }
+        });
 
-            await planningApi.savePlanning({
-                plan_date: currentDate,
-                assignments: planningArray
-            });
+        // On supprime l'alerte si planningArray est vide
+        // et on envoie quand même la requête pour "vider" la planification
+        console.log("Sending planningData:", planningDataRefs);
 
-            alert(`Planning for ${formatDateDisplay(currentDate)} saved successfully!`);
 
-            await loadExistingPlanningForTab(activeTab);
+        await planningApi.savePlanning({
+            plan_date: currentDate,
+            assignments: planningArray, // peut être vide
+        });
 
-        } catch (error) {
-            console.error('❌ Error saving planning:', error);
-            alert('Error saving planning: ' + error.message);
-        } finally {
-            setSaving(false);
+        if (!silent) {
+            alert(`Planning for ${formatDateDisplay(currentDate)} saved!`);
         }
+
+        await loadExistingPlanningForTab(activeTab);
+
+    } catch (err) {
+        console.error(err);
+        if (!silent) alert(err.message);
+    } finally {
+        if (!silent) setSaving(false);
+    }
     };
+
+
+
 
     const saveAllPlanning = async () => {
         try {
@@ -392,6 +532,26 @@ export default function Planning() {
         setCopiedDay(JSON.parse(JSON.stringify(filtered)));
         alert(`Planning for ${formatDateDisplay(date)} copied successfully!`);
     };
+    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    const copyWeek = () => {
+    if (!weekDates || weekDates.length === 0) {
+        alert("No week to copy!");
+        return;
+    }
+
+    const weekPlanning = {};
+
+    weekDates.forEach(date => {
+        // si la journée est vide, on met quand même un objet vide
+        weekPlanning[date] = planningDataRefs.current[date] 
+                             ? JSON.parse(JSON.stringify(planningDataRefs.current[date]))
+                             : {};
+    });
+
+    setCopiedWeek(weekPlanning);
+    alert("✅ Week planning copied successfully!");
+    };
+
 
     const pasteDay = () => {
         const date = getCurrentDate();
@@ -409,15 +569,44 @@ export default function Planning() {
 
         alert(`✅ Copied planning pasted to ${formatDateDisplay(date)}!`);
     };
+    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    const pasteWeek = () => {
+    if (!copiedWeek) {
+        alert("No week copied yet!");
+        return;
+    }
+
+    if (!weekDates || weekDates.length === 0) return;
+
+    weekDates.forEach((date, idx) => {
+        const copiedDate = Object.keys(copiedWeek)[idx];
+
+        // On colle même si la journée est vide
+        planningDataRefs.current[date] = copiedWeek[copiedDate] 
+                                         ? JSON.parse(JSON.stringify(copiedWeek[copiedDate]))
+                                         : {};
+    });
+
+    setTick(t => t + 1); // forcer le rerender
+    alert("✅ Copied week planning pasted successfully!");
+    };
+
+
 
     const navigateWeek = (direction) => {
-        const newWeekDates = weekDates.map(date => {
-            const d = new Date(date);
-            d.setDate(d.getDate() + (direction === 'next' ? 7 : -7));
-            return d.toISOString().split('T')[0];
-        });
-        setWeekDates(newWeekDates);
+    const newWeekDates = weekDates.map(date => {
+        const d = new Date(date);
+        d.setDate(d.getDate() + (direction === 'next' ? 7 : -7));
+        return d.toISOString().split("T")[0];
+    });
+
+    setWeekDates(newWeekDates);
+
+    // Auto-select today's tab if inside this new week
+    const idx = getTodayIndex(newWeekDates);
+    setActiveTab(idx !== -1 ? idx : 0);
     };
+
 
     if (loading) {
         return (
@@ -494,6 +683,31 @@ export default function Planning() {
             // Force UI refresh
             setTick(t => t + 1);
         };
+
+
+        //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+        const saveWeekPlanning = async () => {
+            try {
+                setSavingWeek(true);
+
+                for (let i = 0; i < weekDates.length; i++) {
+                    const date = weekDates[i];
+
+                    // Directly save date (the correct one)
+                    await savePlanning(date, true);
+                }
+
+                alert("Weekly planning saved successfully!");
+
+            } catch (err) {
+                console.error(err);
+                alert("Error saving weekly planning");
+            } finally {
+                setSavingWeek(false);
+            }
+        };
+
+
 
 
     return (
@@ -600,7 +814,9 @@ export default function Planning() {
                                 <td style={{ background: "linear-gradient(to right, #EB4219, #F6892A)", color: "white" }}>
                                     {post.name}
                                 </td>
+                                
                                 {shifts.map(shift => (
+                                    
                                     <td key={shift.id}>
 
                                         {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).map(emp => (
@@ -736,15 +952,34 @@ export default function Planning() {
                     Export Weekly Planning
                 </button>
 
-                <div className='cntbtns' style={{ marginTop: "30px" }}>
+                {/* NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW */}
+                <div className='cntbtns' style={{ display: "flex", gap: "15px", marginTop: "30px" }}>
+                    
+                    {/* Save DAY button */}
+                   <button
+                        className='cntbtn'
+                        onClick={() => savePlanning(weekDates[activeTab], false)}
+                        disabled={saving || savingWeek}
+                    >
+                        {saving ? "Saving..." : `Save ${dayNames[activeTab]} Planning`}
+                    </button>
+
+                    {/* Save WEEK button */}
                     <button
                         className='cntbtn'
-                        onClick={savePlanning}
-                        disabled={saving || loadingPlanning}
+                        onClick={saveWeekPlanning}
+                        disabled={saving || savingWeek}
+                        style={{ backgroundColor: "#1f7ae0" }}
                     >
-                        {saving ? 'Saving...' : `Save ${dayNames[activeTab]} Planning`}
+                        {savingWeek ? "Saving Week..." : "Save Week Planning"}
                     </button>
+
+                    <button className="cntbtn" onClick={copyWeek}>Copy Week</button>
+                    <button className="cntbtn" onClick={pasteWeek}>Paste Week</button>
+
                 </div>
+
+
             </div>
 
             <style jsx>{`
