@@ -94,54 +94,110 @@ function ClockInPage() {
 
 
   // FETCH EMPLOYEES
-  useEffect(() => {
-    const fetchEmployees = async () => {
-      setLoading(true);
-      try {
-        const employeesData = await employeesApi.getEmployees();
+//   useEffect(() => {
+//     const fetchEmployees = async () => {
+//       setLoading(true);
+//       try {
+//         const employeesData = await employeesApi.getEmployees();
 
-        const transformedEmployees = employeesData.map(emp => ({
-          num: emp.emp_id,
-          name: emp.name,
-          clockIn: "00:00",
-          clockOut: "00:00",
-          shift: 0,
-        }));
+//         const transformedEmployees = employeesData.map(emp => ({
+//           num: emp.emp_id,
+//           name: emp.name,
+//           clockIn: "00:00",
+//           clockOut: "00:00",
+//           shift: 0,
+//         }));
 
-        const today = currentDate
-          ? (currentDate instanceof Date ? currentDate.toISOString().split('T')[0] : currentDate)
-          : new Date().toISOString().split('T')[0];
+//         const today = currentDate
+//           ? (currentDate instanceof Date ? currentDate.toISOString().split('T')[0] : currentDate)
+//           : new Date().toISOString().split('T')[0];
 
-        const employeesWithShifts = await Promise.all(
-          transformedEmployees.map(async emp => {
-            try {
-              console.log(`Fetching shift for employee ${emp.num} on date ${today}`);
-              const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
-              if (!res.ok) return { ...emp, shift: 0 };
-              const data = await res.json();
-              return { ...emp, shift: data.shift_id || 0 };
-            } catch {
-              return { ...emp, shift: 0 };
-            }
-          })
-        );
+//         const employeesWithShifts = await Promise.all(
+//           transformedEmployees.map(async emp => {
+//             try {
+//               console.log(`Fetching shift for employee ${emp.num} on date ${today}`);
+//               const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
+//               if (!res.ok) return { ...emp, shift: 0 };
+//               const data = await res.json();
+//               return { ...emp, shift: data.shift_id || 0 };
+//             } catch {
+//               return { ...emp, shift: 0 };
+//             }
+//           })
+//         );
 
-        setEmployees(employeesWithShifts);
-        // ❌ REMOVED: Initializing selectedShifts here conflicts with the array logic above.
-        // The loadShifts effect handles the shift assignments correctly now.
-        setError(null);
+//         setEmployees(employeesWithShifts);
+//         // ❌ REMOVED: Initializing selectedShifts here conflicts with the array logic above.
+//         // The loadShifts effect handles the shift assignments correctly now.
+//         setError(null);
 
-      } catch (err) {
-        console.error('Error fetching employees:', err);
-        setError('Failed to load employees');
-        setEmployees([]);
-      } finally {
-        setLoading(false);
-      }
-    };
+//       } catch (err) {
+//         console.error('Error fetching employees:', err);
+//         setError('Failed to load employees');
+//         setEmployees([]);
+//       } finally {
+//         setLoading(false);
+//       }
+//     };
 
-    fetchEmployees();
-  }, [currentDate]);
+//     fetchEmployees();
+//   }, [currentDate]);
+useEffect(() => {
+  if (!currentDate) return;
+
+  const cacheKey = `employees_${currentDate}`;
+
+  const fetchEmployees = async () => {
+    const cached = localStorage.getItem(cacheKey);
+
+    if (cached) {
+      setEmployees(JSON.parse(cached));
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const employeesData = await employeesApi.getEmployees();
+
+      const transformedEmployees = employeesData.map(emp => ({
+        num: emp.emp_id,
+        name: emp.name,
+        clockIn: "00:00",
+        clockOut: "00:00",
+        shift: 0,
+      }));
+
+      const employeesWithShifts = await Promise.all(
+        transformedEmployees.map(async emp => {
+          try {
+            const res = await fetch(
+              `http://localhost:3001/api/planning/employee-shift/${emp.num}/${currentDate}`
+            );
+            if (!res.ok) return { ...emp, shift: 0 };
+            const data = await res.json();
+            return { ...emp, shift: data.shift_id || 0 };
+          } catch {
+            return { ...emp, shift: 0 };
+          }
+        })
+      );
+
+      setEmployees(employeesWithShifts);
+      localStorage.setItem(cacheKey, JSON.stringify(employeesWithShifts));
+      setError(null);
+
+    } catch (err) {
+      console.error('Error fetching employees:', err);
+      setError('Failed to load employees');
+      setEmployees([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  fetchEmployees();
+}, [currentDate]);
 
 // ... (rest of the component remains unchanged)
 

@@ -216,7 +216,7 @@ export default function Planning() {
     const loadShifts = async () => {
         try {
             const data = await shiftApi.getShifts(); // fetch from backend
-
+            console.log("💾 Shifts data from API:", data);
             const formattedShifts = data.map((s, index) => ({
                 id: s.shift_id, // must match DB
                 name: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)} (${index + 1})`,
@@ -429,7 +429,7 @@ export default function Planning() {
 
         // On supprime l'alerte si planningArray est vide
         // et on envoie quand même la requête pour "vider" la planification
-        console.log("Sending planningData:", planningDataRefs);
+        console.log("Sending planningData:", planningArray);
 
 
         await planningApi.savePlanning({

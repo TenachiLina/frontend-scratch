@@ -3,25 +3,63 @@ import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js"; 
 
 export default function Content({ employees, selectedShifts, setSelectedShifts, onEmployeeDeleted }) {
-// <<<<<<< HEAD
-//   const shiftTimes = {
-//     1: { start: "06:00", end: "14:00" },
-//     2: { start: "08:00", end: "16:00" },
-//     3: { start: "16:00", end: "00:00" }
-//   };
+  const loadFromLocalStorage = (key, defaultValue) => {
+    try {
+      const item = window.localStorage.getItem(key);
+      return item ? JSON.parse(item) : defaultValue;
+    } catch (error) {
+      console.error(`Error loading ${key} from localStorage:`, error);
+      return defaultValue;
+    }
+  };
 
-//   const [currentTab, setCurrentTab] = useState(1);
-// =======
+    // Save to localStorage
+  const saveToLocalStorage = (key, value) => {
+      try {
+        window.localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        console.error(`Error saving ${key} to localStorage:`, error);
+      }
+  };
+
+  const savedTimes = loadFromLocalStorage('employeeTimes', {});
+
+
   const [shifts, setShifts] = useState([]);
   const [currentTab, setCurrentTab] = useState(null);
-
   const [showAddForm, setShowAddForm] = useState(false);
   const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
-
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
 
-  // Load shifts from backend on page load
+  const [manualInput, setManualInput] = useState({
+  employee: null,
+  type: null,      // "clockIn" or "clockOut"
+  value: ""
+  });
+
+
+
+  // State for employee times with localStorage persistence
+  const [employeeTimes, setEmployeeTimes] = useState(() => {
+      const defaultTimes = {};
+      employees.forEach(emp => {  
+        defaultTimes[emp.num] = {
+          clockIn: "00:00",
+          clockOut: "00:00",
+          workTimeId: null
+        };
+      });
+      
+      // Merge saved times with default structure
+      return {
+        ...defaultTimes,
+        ...savedTimes
+      };
+    }
+  );
+
+  //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
       const data = await shiftApi.getShifts();
@@ -30,6 +68,13 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     };
     fetchShifts();
   }, []);
+ 
+  
+
+  const getShiftById = (shiftId) => {
+  if (!shiftId || !shifts.length) return null;
+  return shifts.find(s => s.shift_id === Number(shiftId)) || null;
+  };
 
   // DELETE SHIFT
   const handleDeleteShift = async (shiftId) => {
@@ -66,17 +111,6 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   setShowAddForm(false);
   };
 
-  // const handleSubmitShift = async (e) => {
-  // e.preventDefault();
-
-  // const added = await shiftApi.addShift(newShift);
-  // if (!added) return;
-
-  // setShifts([...shifts, added]);
-
-  // setShowAddForm(false);
-  // setNewShift({ start_time: "", end_time: "" });
-  // };
   const handleSubmitShift = async (e) => {
   e.preventDefault();
 
@@ -97,46 +131,53 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   setNewShift({ start_time: "", end_time: "" });
 };
 
-// >>>>>>> 598e0ba (Save local changes before pull)
-
   // Load from localStorage on component mount
-  const loadFromLocalStorage = (key, defaultValue) => {
-    try {
-      const item = window.localStorage.getItem(key);
-      return item ? JSON.parse(item) : defaultValue;
-    } catch (error) {
-      console.error(`Error loading ${key} from localStorage:`, error);
-      return defaultValue;
-    }
-  };
+// const loadFromLocalStorage = (key, defaultValue) => {
+//     try {
+//       const item = window.localStorage.getItem(key);
+//       return item ? JSON.parse(item) : defaultValue;
+//     } catch (error) {
+//       console.error(`Error loading ${key} from localStorage:`, error);
+//       return defaultValue;
+//     }
+// };
 
-  // Save to localStorage
-  const saveToLocalStorage = (key, value) => {
-    try {
-      window.localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.error(`Error saving ${key} to localStorage:`, error);
-    }
-  };
+//   // Save to localStorage
+// const saveToLocalStorage = (key, value) => {
+//     try {
+//       window.localStorage.setItem(key, JSON.stringify(value));
+//     } catch (error) {
+//       console.error(`Error saving ${key} to localStorage:`, error);
+//     }
+// };
 
-const [manualInput, setManualInput] = useState({
-  employee: null,
-  type: null,      // "clockIn" or "clockOut"
-  value: ""
-});
+// const [manualInput, setManualInput] = useState({
+//   employee: null,
+//   type: null,      // "clockIn" or "clockOut"
+//   value: ""
+// });
 
-  // State for employee times with localStorage persistence
-  const [employeeTimes, setEmployeeTimes] = useState(() => {
-    const defaultTimes = {};
-    employees.forEach(emp => {
-      defaultTimes[emp.num] = {
-        clockIn: "00:00",
-        clockOut: "00:00",
-        workTimeId: null
-      };
-    });
+//   // State for employee times with localStorage persistence
+// const [employeeTimes, setEmployeeTimes] = useState(() => {
+//     const defaultTimes = {};
+//     employees.forEach(emp => {  
+//       defaultTimes[emp.num] = {
+//         clockIn: "00:00",
+//         clockOut: "00:00",
+//         workTimeId: null
+//       };
+//     });
+    
+//     // Merge saved times with default structure
+//     return {
+//       ...defaultTimes,
+//       ...savedTimes
+//     };
+//   }
+// );
+
    // Copy the entire week planning to localStorage
-    const copyWeek = () => {
+const copyWeek = () => {
       try {
         localStorage.setItem('copiedWeek', JSON.stringify(employeeTimes));
         alert('Week planning copied!');
@@ -144,10 +185,10 @@ const [manualInput, setManualInput] = useState({
         console.error('Error copying week:', error);
         alert('Failed to copy week planning');
       }
-    };
+};
 
     // Paste the copied week planning
-    const pasteWeek = () => {
+const pasteWeek = () => {
       try {
         const copied = localStorage.getItem('copiedWeek');
         if (!copied) {
@@ -171,28 +212,29 @@ const [manualInput, setManualInput] = useState({
         console.error('Error pasting week:', error);
         alert('Failed to paste week planning');
       }
-    };
+};
 
-    const savedTimes = loadFromLocalStorage('employeeTimes', {});
+// const savedTimes = loadFromLocalStorage('employeeTimes', {});
 
-    // Merge saved times with default structure
-    return {
-      ...defaultTimes,
-      ...savedTimes
-    };
-  });
+//     // Merge saved times with default structure
+//     return {
+//       ...defaultTimes,
+//       ...savedTimes
+//     };
+//   }
+// );
 
   // Save to localStorage whenever state changes
-  useEffect(() => {
+useEffect(() => {
     saveToLocalStorage('selectedShifts', selectedShifts);
-  }, [selectedShifts]);
+}, [selectedShifts]);
 
-  useEffect(() => {
+useEffect(() => {
     saveToLocalStorage('employeeTimes', employeeTimes);
-  }, [employeeTimes]);
+}, [employeeTimes]);
 
-  // Update employeeTimes when employees prop changes
-  useEffect(() => {
+// Update employeeTimes when employees prop changes
+useEffect(() => {
     setEmployeeTimes(prev => {
       const updatedTimes = { ...prev };
       let hasChanges = false;
@@ -218,8 +260,8 @@ const [manualInput, setManualInput] = useState({
 
       return hasChanges ? updatedTimes : prev;
     });
-  }, [employees]);
-
+  }, [employees]
+);
 
 // Open the popup to manually edit a time
 const openManualInput = (employeeNum, type) => {
@@ -241,15 +283,15 @@ const saveManualTime = () => {
     return;
   }
 
-  const updatedTimes = {
-  ...employeeTimes[employee],
-  [type]: value
-};
+    const updatedTimes = {
+    ...employeeTimes[employee],
+    [type]: value
+  };
 
-setEmployeeTimes(prev => ({
-  ...prev,
-  [employee]: updatedTimes
-}));
+  setEmployeeTimes(prev => ({
+    ...prev,
+    [employee]: updatedTimes
+  }));
 
 
   // If both are filled, auto-save
@@ -262,61 +304,104 @@ setEmployeeTimes(prev => ({
 };
 
   // Calculate if employee is late
-  const calculateLateMinutes = (clockIn, shiftNumber) => {
-    if (clockIn === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-      return 0;
-    }
+//   const calculateLateMinutes = (clockIn, shiftNumber) => {
+//     if (clockIn === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
+//       return 0;
+//     }
 
-    const shiftStart = shiftTimes[shiftNumber].start;
-    const [clockInHours, clockInMinutes] = clockIn.split(':').map(Number);
-    const [shiftStartHours, shiftStartMinutes] = shiftStart.split(':').map(Number);
+//     const shiftStart = shiftTimes[shiftNumber].start;
+//     const [clockInHours, clockInMinutes] = clockIn.split(':').map(Number);
+//     const [shiftStartHours, shiftStartMinutes] = shiftStart.split(':').map(Number);
 
-    const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
-    const shiftStartTotalMinutes = shiftStartHours * 60 + shiftStartMinutes;
+//     const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
+//     const shiftStartTotalMinutes = shiftStartHours * 60 + shiftStartMinutes;
 
-    // Handle overnight shifts (shift 3)
-    let lateMinutes = clockInTotalMinutes - shiftStartTotalMinutes;
+//     // Handle overnight shifts (shift 3)
+//     let lateMinutes = clockInTotalMinutes - shiftStartTotalMinutes;
 
-    // For shift 3 (16:00-00:00), if clock in is after midnight, adjust calculation
-    if (shiftNumber === 3 && clockInHours < 12) {
-      lateMinutes = (clockInTotalMinutes + (24 * 60)) - shiftStartTotalMinutes;
-    }
+//     // For shift 3 (16:00-00:00), if clock in is after midnight, adjust calculation
+//     if (shiftNumber === 3 && clockInHours < 12) {
+//       lateMinutes = (clockInTotalMinutes + (24 * 60)) - shiftStartTotalMinutes;
+//     }
 
-    return lateMinutes > 0 ? lateMinutes : 0; // Return 0 if not late
-  };
+//     return lateMinutes > 0 ? lateMinutes : 0; // Return 0 if not late
+//   };
+const calculateLateMinutes = (clockIn, shiftId) => {
+    if (clockIn === "00:00") return 0;
+
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
+
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const clockInM = toMinutes(clockIn);
+    let shiftStartM = toMinutes(shift.start_time);
+
+    // overnight safety
+    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
+
+    const late = clockInM - shiftStartM;
+    return late > 0 ? late : 0;
+};
+
 
   // Calculate overtime
-  const calculateOvertimeMinutes = (clockOut, shiftNumber) => {
-    if (clockOut === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-      return 0;
-    }
+//   const calculateOvertimeMinutes = (clockOut, shiftNumber) => {
+//     if (clockOut === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
+//       return 0;
+//     }
 
-    const shiftEnd = shiftTimes[shiftNumber].end;
-    const [clockOutHours, clockOutMinutes] = clockOut.split(':').map(Number);
-    const [shiftEndHours, shiftEndMinutes] = shiftEnd.split(':').map(Number);
+//     const shiftEnd = shiftTimes[shiftNumber].end;
+//     const [clockOutHours, clockOutMinutes] = clockOut.split(':').map(Number);
+//     const [shiftEndHours, shiftEndMinutes] = shiftEnd.split(':').map(Number);
 
-    const clockOutTotalMinutes = clockOutHours * 60 + clockOutMinutes;
-    let shiftEndTotalMinutes = shiftEndHours * 60 + shiftEndMinutes;
+//     const clockOutTotalMinutes = clockOutHours * 60 + clockOutMinutes;
+//     let shiftEndTotalMinutes = shiftEndHours * 60 + shiftEndMinutes;
 
-    // Handle overnight shifts (shift 3 ends at 00:00 which is 24:00)
-    if (shiftNumber === 3 && shiftEndTotalMinutes === 0) {
-      shiftEndTotalMinutes = 24 * 60; // 00:00 = 24:00
-    }
+//     // Handle overnight shifts (shift 3 ends at 00:00 which is 24:00)
+//     if (shiftNumber === 3 && shiftEndTotalMinutes === 0) {
+//       shiftEndTotalMinutes = 24 * 60; // 00:00 = 24:00
+//     }
 
-    const overtimeMinutes = clockOutTotalMinutes - shiftEndTotalMinutes;
-    return overtimeMinutes > 0 ? overtimeMinutes : 0;
-  };
+//     const overtimeMinutes = clockOutTotalMinutes - shiftEndTotalMinutes;
+//     return overtimeMinutes > 0 ? overtimeMinutes : 0;
+//   };
+const calculateOvertimeMinutes = (clockOut, shiftId) => {
+    if (clockOut === "00:00") return 0;
 
-  // Format minutes to HH:MM
-  const formatMinutesToTime = (totalMinutes) => {
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
+
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    let clockOutM = toMinutes(clockOut);
+    let shiftEndM = toMinutes(shift.end_time);
+
+    // handle overnight shift ending at 00:00
+    if (shiftEndM === 0) shiftEndM = 24 * 60;
+    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
+
+    const overtime = clockOutM - shiftEndM;
+    return overtime > 0 ? overtime : 0;
+};
+
+
+// Format minutes to HH:MM
+const formatMinutesToTime = (totalMinutes) => {
     if (totalMinutes <= 0) return "00:00";
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
+};
 
-  // Calculate hours worked
-  const calculateHours = (clockIn, clockOut) => {
+// Calculate hours worked
+const calculateHours = (clockIn, clockOut) => {
     if (clockIn === "00:00" || clockOut === "00:00") {
       return "00:00";
     }
@@ -338,32 +423,32 @@ setEmployeeTimes(prev => ({
     const minutes = diffMinutes % 60;
 
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-  };
+};
 
-  // Function to get current time in HH:MM format
-  const getCurrentTime = () => {
+// Function to get current time in HH:MM format
+const getCurrentTime = () => {
     const now = new Date();
     const hours = now.getHours().toString().padStart(2, '0');
     const minutes = now.getMinutes().toString().padStart(2, '0');
     return `${hours}:${minutes}`;
-  };
+};
 
-  // Function to get current date in YYYY-MM-DD format
-  const getCurrentDate = () => {
+// Function to get current date in YYYY-MM-DD format
+const getCurrentDate = () => {
     const now = new Date();
     return now.toISOString().split('T')[0];
-  };
+};
 
- // Handle shift selection
-  const handleShiftChange = (employeeNum, shiftValue) => {
+// Handle shift selection
+const handleShiftChange = (employeeNum, shiftValue) => {
     setSelectedShifts(prev => ({
       ...prev,
       [employeeNum]: shiftValue
     }));
-  };
+};
 
-  // Save work time to database
-  const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
+// Save work time to database
+const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
     try {
       // 🛑 FIX 3a: Since selectedShifts[employeeNum] is now an array, we must pick one.
       // Use the currently active tab shift for calculation when saving.
@@ -403,10 +488,10 @@ setEmployeeTimes(prev => ({
       console.error('Error saving work time:', error);
       alert('Error saving work time to database');
     }
-  };
+};
 
-  // Handle clock in
-  const handleClockIn = (employeeNum) => {
+// Handle clock in
+const handleClockIn = (employeeNum) => {
     const currentTime = getCurrentTime();
     const updatedTimes = {
       ...employeeTimes[employeeNum],
@@ -421,10 +506,10 @@ setEmployeeTimes(prev => ({
     if (updatedTimes.clockOut !== "00:00") {
       saveWorkTimeToDB(employeeNum, currentTime, updatedTimes.clockOut);
     }
-  };
+};
 
-  // Handle clock out
-  const handleClockOut = (employeeNum) => {
+// Handle clock out
+const handleClockOut = (employeeNum) => {
     const currentTime = getCurrentTime();
     const updatedTimes = {
       ...employeeTimes[employeeNum],
@@ -439,10 +524,10 @@ setEmployeeTimes(prev => ({
     if (updatedTimes.clockIn !== "00:00") {
       saveWorkTimeToDB(employeeNum, updatedTimes.clockIn, currentTime);
     }
-  };
+};
 
-  // Add a function to clear all data (optional, for testing)
-  const clearLocalData = () => {
+// Add a function to clear all data (optional, for testing)
+const clearLocalData = () => {
       localStorage.removeItem('employeeTimes');
 
   // Reset only the employeeTimes data
@@ -462,31 +547,34 @@ setEmployeeTimes(prev => ({
   });
 
   alert('All clock-in/out and related fields have been reset!');
-  };
-  // Get current time for an employee
-  const getEmployeeTime = (employeeNum, type) => {
+};
+
+// Get current time for an employee
+const getEmployeeTime = (employeeNum, type) => {
     return employeeTimes[employeeNum]?.[type] || "00:00";
-  };
+};
 
-  
-
-  // Get display values for delay and overtime
-  const getDisplayDelay = (employeeNum) => {
+// Get display values for delay and overtime
+const getDisplayDelay = (employeeNum) => {
     const clockIn = getEmployeeTime(employeeNum, 'clockIn');
     const shiftNumber = parseInt(selectedShifts[employeeNum]);
     const lateMinutes = calculateLateMinutes(clockIn, shiftNumber);
     return formatMinutesToTime(lateMinutes);
-  };
+};
 
-  const getDisplayOvertime = (employeeNum) => {
+const getDisplayOvertime = (employeeNum) => {
     const clockOut = getEmployeeTime(employeeNum, 'clockOut');
     const shiftNumber = parseInt(selectedShifts[employeeNum]);
     const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
     return formatMinutesToTime(overtimeMinutes);
-  };
+};
 
-  return (
+return (
     <>
+      {(!shifts.length || currentTab === null) ? (
+      <div>Loading shifts...</div>
+      ) :( 
+      <>  
       <div
         style={{
           display: "flex",
@@ -500,15 +588,14 @@ setEmployeeTimes(prev => ({
         }}
       >
         Enter clock in/out and shift number:
+        <button
+          className="newDay"
+          onClick={clearLocalData}
+        >
+          Clear local data
+        </button>
+      </div>
       
-      <button
-        className="newDay"
-        onClick={clearLocalData}
-      >
-         Clear local data
-      </button>
-
-    </div>
       <div style={{ marginLeft: "35px", marginTop: "20px" }}>
         <div style={{ marginLeft: "35px", marginTop: "20px" }}>
           {/* ADD SHIFT button */}
@@ -625,9 +712,20 @@ setEmployeeTimes(prev => ({
             {shifts.map((shift) => (
               <div key={shift.shift_id} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
                 
-                <button className="newDay">
+                {/* <button className="newDay">
+                  Shift ({shift.start_time} - {shift.end_time})
+                </button> */}
+                <button
+                  className="newDay"
+                  onClick={() => setCurrentTab(shift.shift_id)}
+                  style={{
+                    backgroundColor: currentTab === shift.shift_id ? "#28a745" : "#6c757d",
+                    color: "white"
+                  }}
+                >
                   Shift ({shift.start_time} - {shift.end_time})
                 </button>
+
 
                 {/* Edit */}
                 <button
@@ -663,14 +761,12 @@ setEmployeeTimes(prev => ({
             ))}
           </div>
         </div>
-
       </div>
 
       <div>
         <table border="1" cellPadding="20" cellSpacing="0">
           <thead>
             <tr>
-
               {/* <th>Num</th> */}
               <th>Full name</th>
               <th>Clock in</th>
@@ -685,229 +781,242 @@ setEmployeeTimes(prev => ({
               {/* <th>Operations</th> */}
             </tr>
           </thead>
-          <tbody>
-{employees.filter((emp) => {
-    const assignedShifts = selectedShifts[emp.num];
-    const currentShift = currentTab.toString();
-    
-    // Check if assignedShifts is an array and includes the current tab number
-    if (Array.isArray(assignedShifts)) {
-        return assignedShifts.includes(currentShift);
-    }
+         <tbody>
+            {
+            employees.filter((emp) => {
+              
+        //     const assignedShifts = selectedShifts[emp.num];
+        //     if (currentTab === null) return true;
+        //     const current = String(currentTab);
+            
+        //     // Check if assignedShifts is an array and includes the current tab number
+        //     if (Array.isArray(assignedShifts)) {
+        //         return assignedShifts.includes(currentShift);
+        //     }
 
 
-    // Fallback for single-shift value (though this should be an array now)
-    return assignedShifts && assignedShifts.toString() === currentShift;
-  })
-  .map((emp) => {
-              const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
-              const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-              const currentDelay = getDisplayDelay(emp.num);
-              const currentOvertime = getDisplayOvertime(emp.num);
+        //     // Fallback for single-shift value (though this should be an array now)
+        //     return assignedShifts && assignedShifts.toString() === currentShift;
+              // While loading, show all employees
+          if (!currentTab) return true;
 
+          const current = String(currentTab);
+          const assignedShifts = selectedShifts[emp.num];
 
-              return (
-                <tr key={emp.num}>
-                  {/* <td>{emp.num}</td> */}
-                  <td>{emp.name}</td>
-                  <td>
-                    <button
-                      className="time-button"
-                      onClick={() => handleClockIn(emp.num)}
-                      style={{
-                        background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        width: '100%'
-                      }}
-                    >
-                      Clock In<br />{currentClockIn}
-                    </button>
-<button
-  style={{
-    marginTop: "3px",
-    background: "#ffc107",
-    color: "black",
-    padding: "4px 6px",
-    borderRadius: "4px",
-    cursor: "pointer",
-    width: "100%"
-  }}
-  onClick={() => openManualInput(emp.num, "clockIn")}
->
-  Edit Clock In
-</button>
-                  </td>
-                  <td>
-                    <button
-                      className="time-button"
-                      onClick={() => handleClockOut(emp.num)}
-                      style={{
-                        background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
-                        color: 'white',
-                        border: 'none',
-                        padding: '8px 12px',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '14px',
-                        width: '100%'
-                      }}
-                    >
-                      Clock Out<br />{currentClockOut}
-                    </button>
-<button
-  style={{
-    marginTop: "3px",
-    background: "#ffc107",
-    color: "black",
-    padding: "4px 6px",
-    borderRadius: "4px",
-    cursor: "pointer",
-    width: "100%"
-  }}
-  onClick={() => openManualInput(emp.num, "clockOut")}
->
-  Edit Clock Out
-</button>
+          // No shift assignment yet → do not hide employee
+          if (!assignedShifts) return true;
 
-                  </td>
-                {/*  <td>
-                    <div style={{ 
-                      textAlign: 'center', 
-                      fontWeight: 'bold', 
-                      fontSize: '16px',
-                      padding: '8px'
-                    }}>
-                      {Array.isArray(selectedShifts[emp.num]) ? selectedShifts[emp.num].join(', ') : selectedShifts[emp.num] || "N/A"}
-                    </div>
-                  </td>*/}
-                  <td>
-                  <input
-                    type="number"
-                    value={employeeTimes[emp.num]?.consomation || ""}
-                    onChange={(e) =>
-                      setEmployeeTimes((prev) => ({
-                        ...prev,
-                        [emp.num]: {
-                          ...prev[emp.num],
-                          consomation: e.target.value,
-                        },
-                      }))
-                    }
-                    style={{ width: "80px" }}
-                  />
-                </td>
+          return Array.isArray(assignedShifts)
+            ? assignedShifts.map(String).includes(current)
+            : String(assignedShifts) === current;
+          })
+          .map((emp) => {
+                      const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
+                      const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
+                      const currentDelay = getDisplayDelay(emp.num);
+                      const currentOvertime = getDisplayOvertime(emp.num);
+                      return (
+                        <tr key={emp.num}>
+                          {/* <td>{emp.num}</td> */}
+                          <td>{emp.name}</td>
+                          <td>
+                            <button
+                              className="time-button"
+                              onClick={() => handleClockIn(emp.num)}
+                              style={{
+                                background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
+                                color: 'white',
+                                border: 'none',
+                                padding: '8px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                width: '100%'
+                              }}
+                            >
+                              Clock In<br />{currentClockIn}
+                            </button>
+                            <button
+                              style={{
+                                marginTop: "3px",
+                                background: "#ffc107",
+                                color: "black",
+                                padding: "4px 6px",
+                                borderRadius: "4px",
+                                cursor: "pointer",
+                                width: "100%"
+                              }}
+                              onClick={() => openManualInput(emp.num, "clockIn")}
+                            >
+                              Edit Clock In
+                            </button>
+                          </td>
+                           <td>
+                            <button
+                              className="time-button"
+                              onClick={() => handleClockOut(emp.num)}
+                              style={{
+                                background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
+                                color: 'white',
+                                border: 'none',
+                                padding: '8px 12px',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '14px',
+                                width: '100%'
+                              }}
+                            >
+                              Clock Out<br />{currentClockOut}
+                            </button>
+                          <button
+                            style={{
+                              marginTop: "3px",
+                              background: "#ffc107",
+                              color: "black",
+                              padding: "4px 6px",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              width: "100%"
+                            }}
+                            onClick={() => openManualInput(emp.num, "clockOut")}
+                          >
+                            Edit Clock Out
+                          </button>
 
-                <td>
-                  <input
-                    type="number"
-                    value={employeeTimes[emp.num]?.penalty || ""}
-                    onChange={(e) =>
-                      setEmployeeTimes((prev) => ({
-                        ...prev,
-                        [emp.num]: {
-                          ...prev[emp.num],
-                          penalty: e.target.value,
-                        },
-                      }))
-                    }
-                    style={{ width: "80px" }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number"
-                    value={employeeTimes[emp.num]?.bonus || ""}
-                    onChange={(e) =>
-                      setEmployeeTimes((prev) => ({
-                        ...prev,
-                        [emp.num]: {
-                          ...prev[emp.num],
-                          bonus: e.target.value,
-                        },
-                      }))
-                    }
-                    style={{ width: "80px" }}
-                  />
+                          </td>
+                        {/*  <td>
+                            <div style={{ 
+                              textAlign: 'center', 
+                              fontWeight: 'bold', 
+                              fontSize: '16px',
+                              padding: '8px'
+                            }}>
+                              {Array.isArray(selectedShifts[emp.num]) ? selectedShifts[emp.num].join(', ') : selectedShifts[emp.num] || "N/A"}
+                            </div>
+                          </td>*/}
+                          <td>
+                          <input
+                            type="number"
+                            value={employeeTimes[emp.num]?.consomation || ""}
+                            onChange={(e) =>
+                              setEmployeeTimes((prev) => ({
+                                ...prev,
+                                [emp.num]: {
+                                  ...prev[emp.num],
+                                  consomation: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ width: "80px" }}
+                          />
+                        </td>
 
-               </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={employeeTimes[emp.num]?.penalty || ""}
+                            onChange={(e) =>
+                              setEmployeeTimes((prev) => ({
+                                ...prev,
+                                [emp.num]: {
+                                  ...prev[emp.num],
+                                  penalty: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ width: "80px" }}
+                          />
+                        </td>
+                        <td>
+                          <input
+                            type="number"
+                            value={employeeTimes[emp.num]?.bonus || ""}
+                            onChange={(e) =>
+                              setEmployeeTimes((prev) => ({
+                                ...prev,
+                                [emp.num]: {
+                                  ...prev[emp.num],
+                                  bonus: e.target.value,
+                                },
+                              }))
+                            }
+                            style={{ width: "80px" }}
+                          />
 
-                  <td>{currentDelay}</td>
-                  <td>{currentOvertime}</td>
-                  <td>{calculateHours(currentClockIn, currentClockOut)}</td>
-                  
-                </tr>
-              );
-            })}
+                       </td>
+
+                          <td>{currentDelay}</td>
+                          <td>{currentOvertime}</td>
+                          <td>{calculateHours(currentClockIn, currentClockOut)}</td>
+                          
+                        </tr>
+                      );})}
           </tbody>
         </table>
-      </div>
-{manualInput.employee && (
-  <div
-    style={{
-      position: "fixed",
-      top: "50%",
-      left: "50%",
-      transform: "translate(-50%, -50%)",
-      background: "white",
-      padding: "20px",
-      borderRadius: "8px",
-      boxShadow: "0 0 10px rgba(0,0,0,0.3)",
-      zIndex: 9999
-    }}
-  >
-    <h3>
-      Edit {manualInput.type === "clockIn" ? "Clock-In" : "Clock-Out"} Time
-    </h3>
+       </div>
+      {manualInput.employee && (
+        <div
+          style={{
+            position: "fixed",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "white",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+            zIndex: 9999
+          }}
+        >
+          <h3>
+            Edit {manualInput.type === "clockIn" ? "Clock-In" : "Clock-Out"} Time
+          </h3>
 
-    <input
-      type="time"
-      value={manualInput.value}
-      onChange={(e) =>
-        setManualInput(prev => ({ ...prev, value: e.target.value }))
-      }
-      style={{
-        fontSize: "18px",
-        padding: "6px",
-        width: "140px",
-        marginTop: "10px"
-      }}
-    />
+          <input
+            type="time"
+            value={manualInput.value}
+            onChange={(e) =>
+              setManualInput(prev => ({ ...prev, value: e.target.value }))
+            }
+            style={{
+              fontSize: "18px",
+              padding: "6px",
+              width: "140px",
+              marginTop: "10px"
+            }}
+          />
 
-    <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
-      <button
-        onClick={saveManualTime}
-        style={{
-          padding: "8px 12px",
-          background: "#28a745",
-          color: "white",
-          borderRadius: "4px"
-        }}
-      >
-        Save
-      </button>
+          <div style={{ marginTop: "15px", display: "flex", gap: "10px" }}>
+            <button
+              onClick={saveManualTime}
+              style={{
+                padding: "8px 12px",
+                background: "#28a745",
+                color: "white",
+                borderRadius: "4px"
+              }}
+            >
+              Save
+            </button>
 
-      <button
-        onClick={() =>
-          setManualInput({ employee: null, type: null, value: "" })
-        }
-        style={{
-          padding: "8px 12px",
-          background: "#dc3545",
-          color: "white",
-          borderRadius: "4px"
-        }}
-      >
-        Cancel
-      </button>
-    </div>
-  </div>
-)}
-
-    </>
+            <button
+              onClick={() =>
+                setManualInput({ employee: null, type: null, value: "" })
+              }
+              style={{
+                padding: "8px 12px",
+                background: "#dc3545",
+                color: "white",
+                borderRadius: "4px"
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+    )}
+    </>
 );
 }
