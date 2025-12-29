@@ -5,6 +5,7 @@ import TextField from "../Components/TextField"
 import { useState, useEffect } from "react";
 import { employeesApi } from "../services/employeesAPI";
 import { worktimeApi } from "../services/worktimeAPI";
+import { API_BASE_URL } from "./config";
 
 // Function to calculate work hours, late minutes, and overtime
 function calculateWorkTime(shiftStart, shiftEnd, clockIn, clockOut) {
@@ -46,7 +47,7 @@ function ClockInPage() {
  const acc = await accPromise; // Resolve the accumulator promise
 
  // IMPORTANT: Change the API endpoint to return ALL shifts for the day
- const res = await fetch(`http://localhost:3001/api/planning/employee-shifts-all/${emp.num}/${currentDate}`); 
+ const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`); 
  if (!res.ok) return acc;
  
  // ASSUME the API returns an ARRAY of shift objects
@@ -172,7 +173,7 @@ useEffect(() => {
         transformedEmployees.map(async emp => {
           try {
             const res = await fetch(
-              `http://localhost:3001/api/planning/employee-shift/${emp.num}/${currentDate}`
+              `${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${currentDate}`
             );
             if (!res.ok) return { ...emp, shift: 0 };
             const data = await res.json();
@@ -207,7 +208,7 @@ useEffect(() => {
     const updated = await Promise.all(
       employeesList.map(async (emp) => {
         try {
-          const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
+          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${today}`);
           if (!res.ok) throw new Error("No planned shift");
           const data = await res.json();
           return {
