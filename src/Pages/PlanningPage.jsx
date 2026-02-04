@@ -6,8 +6,8 @@ import ShiftsDropDownList from "../Components/ShiftDropDownList"
 import { employeesApi } from "../services/employeesAPI"
 import { planningApi } from "../services/planningAPI"
 import { shiftApi } from '../services/shfitAPI.js'; // adjust the path to match your project
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
+// import jsPDF from "jspdf";
+// import autoTable from "jspdf-autotable";
 
 
 

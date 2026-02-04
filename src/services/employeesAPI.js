@@ -51,11 +51,10 @@ export const employeesApi = {
       formData.append("personal_image", employeeData.personal_image);
     }
     formData.append("name", employeeData.name);
-    formData.append("Total_hours", employeeData.Total_hours);
     formData.append("Base_salary", employeeData.Base_salary);
     formData.append("address", employeeData.address);
     formData.append("phone_number", employeeData.phone_number);
-    
+    console.log("form data appended")
     
     const response = await fetch(`${API_BASE_URL}/api/employees`, {
       method: "POST",
@@ -80,7 +79,6 @@ async updateEmployee(employeeId, employeeData) {
       formData.append("personal_image", employeeData.personal_image);
 
     formData.append("name", employeeData.name);
-    formData.append("Total_hours", employeeData.Total_hours);
     formData.append("Base_salary", employeeData.Base_salary);
     formData.append("address", employeeData.address);
     formData.append("phone_number", employeeData.phone_number);
