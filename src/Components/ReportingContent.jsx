@@ -298,7 +298,7 @@ export default function ReportingContent({
                         <div style={cardsContainerStyle}>
                             {new Date(startEnd.end) - new Date(startEnd.start) < 7 * 24 * 60 * 60 * 1000 ? (
                                 <>
-                                    <Card label="Total Hours" value={`${weekSummary.totalHours} h`} />
+
                                     <Card label="Brut Salary" value={`${weekSummary.brutSalary} DA`} sub={`${weekSummary.hourlyRate} DA / hour`} />
                                     <Card label="Net Salary" value={`${weekSummary.netSalary} DA`} />
                                     <Card label="Advance" value={`${weekSummary.advance} DA`}>
@@ -315,6 +315,7 @@ export default function ReportingContent({
                                             Advance Given
                                         </label>
                                     </Card>
+                                    <Card label="Total Hours" value={`${weekSummary.totalHours} h`} />
                                     <Card label="Total Late Minutes" value={`${weekSummary.totalLate || 0} min`} />
                                     <Card label="Total Consommation" value={`${weekSummary.totalConsommation || 0} DA`} />
                                     <Card label="Total Penalties" value={`${weekSummary.totalPenalties || 0} DA`} />
