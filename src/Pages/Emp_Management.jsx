@@ -16,7 +16,6 @@ export default function Emp_Management() {
   const [employeeForm, setEmployeeForm] = useState({
     personal_image: null,
     name: "",
-    Total_hours: "",
     Base_salary: "",
     address: "",
     phone_number: "",
@@ -82,7 +81,7 @@ export default function Emp_Management() {
 
         // Add on server
         const created = await employeesApi.addEmployee(employeeForm);
-         //Tell the reporting page After adding or deleting
+        //Tell the reporting page After adding or deleting
         localStorage.setItem("employees_updated", Date.now()); // just a timestamp
 
         // If API returned created employee, append it. Otherwise fallback to re-fetch.
@@ -105,7 +104,6 @@ export default function Emp_Management() {
       setEmployeeForm({
         personal_image: null,
         name: "",
-        Total_hours: "",
         Base_salary: "",
         address: "",
         phone_number: "",
@@ -143,7 +141,6 @@ export default function Emp_Management() {
     setEmployeeForm({
       personal_image: null, // image optional
       name: emp.name,
-      Total_hours: emp.Total_hours,
       Base_salary: emp.Base_salary,
       address: emp.address,
       phone_number: emp.phone_number,
@@ -169,7 +166,6 @@ export default function Emp_Management() {
               setEmployeeForm({
                 personal_image: null,
                 name: "",
-                Total_hours: "",
                 Base_salary: "",
                 address: "",
                 phone_number: "",
@@ -186,7 +182,6 @@ export default function Emp_Management() {
               <tr>
                 <th>Photo</th>
                 <th>Full Name</th>
-                <th>Salary Per Hour</th>
                 <th>Base Salary</th>
                 <th>Address</th>
                 <th>Phone</th>
@@ -212,7 +207,6 @@ export default function Emp_Management() {
                       />
                     </td>
                     <td>{emp.name}</td>
-                    <td>{emp.Total_hours}</td>
                     <td>{emp.Base_salary}</td>
                     <td>{emp.address}</td>
                     <td>{emp.phone_number}</td>
@@ -243,9 +237,6 @@ export default function Emp_Management() {
 
                 <label>Name:</label>
                 <input type="text" name="name" value={employeeForm.name} onChange={handleChange} />
-
-                <label>Salary Per Hour:</label>
-                <input type="number" name="Total_hours" value={employeeForm.Total_hours} onChange={handleChange} />
 
                 <label>Base Salary:</label>
                 <input type="number" name="Base_salary" value={employeeForm.Base_salary} onChange={handleChange} />
