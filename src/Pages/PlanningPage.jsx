@@ -6,6 +6,10 @@ import ShiftsDropDownList from "../Components/ShiftDropDownList"
 import { employeesApi } from "../services/employeesAPI"
 import { planningApi } from "../services/planningAPI"
 import { shiftApi } from '../services/shfitAPI.js'; // adjust the path to match your project
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+
+
 
 
 // ---------- Module-level session cache & in-flight tracker ----------
@@ -14,20 +18,25 @@ let employeesCachePromise = null;
 // -------------------------------------------------------------------
 
 export default function Planning() {
-     const getWeekDates = () => {
+    const getWeekDates = () => {
         const dates = [];
         const today = new Date();
-        const currentDay = today.getDay();
-        const monday = new Date(today);
-        monday.setDate(today.getDate() - currentDay + (currentDay === 0 ? -6 : 1));
+        const currentDay = today.getDay(); // 0=Sun, 6=Sat
+
+        // find last Saturday (or today if today is Saturday)
+        const saturday = new Date(today);
+        const diff = (currentDay + 1) % 7;
+        saturday.setDate(today.getDate() - diff);
 
         for (let i = 0; i < 7; i++) {
-            const date = new Date(monday);
-            date.setDate(monday.getDate() + i);
+            const date = new Date(saturday);
+            date.setDate(saturday.getDate() + i);
             dates.push(date.toISOString().split('T')[0]);
         }
+
         return dates;
     };
+
 
     const [weekDates, setWeekDates] = useState(getWeekDates());
 
@@ -48,12 +57,12 @@ export default function Planning() {
     const [loadingPlanning, setLoadingPlanning] = useState(false);
     // const [activeTab, setActiveTab] = useState(0);
     const [activeTab, setActiveTab] = useState(() => {
-    const idx = getTodayIndex(weekDates);
-    return idx !== -1 ? idx : 0;
+        const idx = getTodayIndex(weekDates);
+        return idx !== -1 ? idx : 0;
     });
 
     const [assignments, setAssignments] = useState({});
-    
+
     const [copiedDay, setCopiedDay] = useState(null);
     const [tick, setTick] = useState(0);
 
@@ -79,7 +88,8 @@ export default function Planning() {
         { id: 8, name: "Manageur" },
         { id: 9, name: "Packaging" },
         { id: 10, name: "Topping" },
-        { id: 11, name: "Bar" }
+        { id: 11, name: "Bar" },
+        { id: 12, name: "Pate" }
     ];
 
     // const shifts = [
@@ -92,7 +102,7 @@ export default function Planning() {
     //here was get week days.
 
 
-    const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    const dayNames = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
 
     const getCurrentDate = () => weekDates[activeTab];
 
@@ -185,10 +195,10 @@ export default function Planning() {
 
     //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
     useEffect(() => {
-    if (!weekDates || weekDates.length === 0) return;
+        if (!weekDates || weekDates.length === 0) return;
 
-    const idx = getTodayIndex(weekDates);
-    setActiveTab(idx !== -1 ? idx : 0);
+        const idx = getTodayIndex(weekDates);
+        setActiveTab(idx !== -1 ? idx : 0);
     }, [weekDates]);
 
     // useEffect(() => {
@@ -213,22 +223,22 @@ export default function Planning() {
     //     loadShifts();
     // }, []);
     useEffect(() => {
-    const loadShifts = async () => {
-        try {
-            const data = await shiftApi.getShifts(); // fetch from backend
-            console.log("💾 Shifts data from API:", data);
-            const formattedShifts = data.map((s, index) => ({
-                id: s.shift_id, // must match DB
-                name: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)} (${index + 1})`,
-                time: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)}` // optional if needed
-            }));
+        const loadShifts = async () => {
+            try {
+                const data = await shiftApi.getShifts(); // fetch from backend
+                console.log("💾 Shifts data from API:", data);
+                const formattedShifts = data.map((s, index) => ({
+                    id: s.shift_id, // must match DB
+                    name: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)} (${index + 1})`,
+                    time: `${s.start_time.slice(0, 5)}-${s.end_time.slice(0, 5)}` // optional if needed
+                }));
 
-            setShifts(formattedShifts);
-            console.log("💾 Loaded shifts:", formattedShifts); // debug
-        } catch (err) {
-            console.error("Failed to fetch shifts:", err);
-        }
-    };
+                setShifts(formattedShifts);
+                console.log("💾 Loaded shifts:", formattedShifts); // debug
+            } catch (err) {
+                console.error("Failed to fetch shifts:", err);
+            }
+        };
 
         loadShifts();
     }, []);
@@ -393,62 +403,62 @@ export default function Planning() {
     // }
     // };
     const savePlanning = async (date, silent = false) => {
-    const currentDate = date; 
+        const currentDate = date;
 
-    try {
-        if (!silent) setSaving(true);
+        try {
+            if (!silent) setSaving(true);
 
-        const dayData = planningDataRefs.current?.[currentDate] || {};
-        const planningArray = [];
+            const dayData = planningDataRefs.current?.[currentDate] || {};
+            const planningArray = [];
 
-        Object.entries(dayData).forEach(([key, employees]) => {
-            if (!employees) return;
+            Object.entries(dayData).forEach(([key, employees]) => {
+                if (!employees) return;
 
-            const [postId, shiftId] = key.split('-');
+                const [postId, shiftId] = key.split('-');
 
-            if (Array.isArray(employees)) {
-                employees.forEach(emp => {
-                    if (emp?.emp_id) {
-                        planningArray.push({
-                            shift_id: parseInt(shiftId),
-                            emp_id: emp.emp_id,
-                            task_id: parseInt(postId),
-                            plan_date: currentDate,
-                        });
-                    }
-                });
-            } else if (employees.emp_id) {
-                planningArray.push({
-                    shift_id: parseInt(shiftId),
-                    emp_id: employees.emp_id,
-                    task_id: parseInt(postId),
-                    plan_date: currentDate,
-                });
+                if (Array.isArray(employees)) {
+                    employees.forEach(emp => {
+                        if (emp?.emp_id) {
+                            planningArray.push({
+                                shift_id: parseInt(shiftId),
+                                emp_id: emp.emp_id,
+                                task_id: parseInt(postId),
+                                plan_date: currentDate,
+                            });
+                        }
+                    });
+                } else if (employees.emp_id) {
+                    planningArray.push({
+                        shift_id: parseInt(shiftId),
+                        emp_id: employees.emp_id,
+                        task_id: parseInt(postId),
+                        plan_date: currentDate,
+                    });
+                }
+            });
+
+            // On supprime l'alerte si planningArray est vide
+            // et on envoie quand même la requête pour "vider" la planification
+            console.log("Sending planningData:", planningArray);
+
+
+            await planningApi.savePlanning({
+                plan_date: currentDate,
+                assignments: planningArray, // peut être vide
+            });
+
+            if (!silent) {
+                alert(`Planning for ${formatDateDisplay(currentDate)} saved!`);
             }
-        });
 
-        // On supprime l'alerte si planningArray est vide
-        // et on envoie quand même la requête pour "vider" la planification
-        console.log("Sending planningData:", planningArray);
+            await loadExistingPlanningForTab(activeTab);
 
-
-        await planningApi.savePlanning({
-            plan_date: currentDate,
-            assignments: planningArray, // peut être vide
-        });
-
-        if (!silent) {
-            alert(`Planning for ${formatDateDisplay(currentDate)} saved!`);
+        } catch (err) {
+            console.error(err);
+            if (!silent) alert(err.message);
+        } finally {
+            if (!silent) setSaving(false);
         }
-
-        await loadExistingPlanningForTab(activeTab);
-
-    } catch (err) {
-        console.error(err);
-        if (!silent) alert(err.message);
-    } finally {
-        if (!silent) setSaving(false);
-    }
     };
 
 
@@ -534,22 +544,22 @@ export default function Planning() {
     };
     //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
     const copyWeek = () => {
-    if (!weekDates || weekDates.length === 0) {
-        alert("No week to copy!");
-        return;
-    }
+        if (!weekDates || weekDates.length === 0) {
+            alert("No week to copy!");
+            return;
+        }
 
-    const weekPlanning = {};
+        const weekPlanning = {};
 
-    weekDates.forEach(date => {
-        // si la journée est vide, on met quand même un objet vide
-        weekPlanning[date] = planningDataRefs.current[date] 
-                             ? JSON.parse(JSON.stringify(planningDataRefs.current[date]))
-                             : {};
-    });
+        weekDates.forEach(date => {
+            // si la journée est vide, on met quand même un objet vide
+            weekPlanning[date] = planningDataRefs.current[date]
+                ? JSON.parse(JSON.stringify(planningDataRefs.current[date]))
+                : {};
+        });
 
-    setCopiedWeek(weekPlanning);
-    alert("✅ Week planning copied successfully!");
+        setCopiedWeek(weekPlanning);
+        alert("✅ Week planning copied successfully!");
     };
 
 
@@ -571,40 +581,40 @@ export default function Planning() {
     };
     //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
     const pasteWeek = () => {
-    if (!copiedWeek) {
-        alert("No week copied yet!");
-        return;
-    }
+        if (!copiedWeek) {
+            alert("No week copied yet!");
+            return;
+        }
 
-    if (!weekDates || weekDates.length === 0) return;
+        if (!weekDates || weekDates.length === 0) return;
 
-    weekDates.forEach((date, idx) => {
-        const copiedDate = Object.keys(copiedWeek)[idx];
+        weekDates.forEach((date, idx) => {
+            const copiedDate = Object.keys(copiedWeek)[idx];
 
-        // On colle même si la journée est vide
-        planningDataRefs.current[date] = copiedWeek[copiedDate] 
-                                         ? JSON.parse(JSON.stringify(copiedWeek[copiedDate]))
-                                         : {};
-    });
+            // On colle même si la journée est vide
+            planningDataRefs.current[date] = copiedWeek[copiedDate]
+                ? JSON.parse(JSON.stringify(copiedWeek[copiedDate]))
+                : {};
+        });
 
-    setTick(t => t + 1); // forcer le rerender
-    alert("✅ Copied week planning pasted successfully!");
+        setTick(t => t + 1); // forcer le rerender
+        alert("✅ Copied week planning pasted successfully!");
     };
 
 
 
     const navigateWeek = (direction) => {
-    const newWeekDates = weekDates.map(date => {
-        const d = new Date(date);
-        d.setDate(d.getDate() + (direction === 'next' ? 7 : -7));
-        return d.toISOString().split("T")[0];
-    });
+        const newWeekDates = weekDates.map(date => {
+            const d = new Date(date);
+            d.setDate(d.getDate() + (direction === 'next' ? 7 : -7));
+            return d.toISOString().split("T")[0];
+        });
 
-    setWeekDates(newWeekDates);
+        setWeekDates(newWeekDates);
 
-    // Auto-select today's tab if inside this new week
-    const idx = getTodayIndex(newWeekDates);
-    setActiveTab(idx !== -1 ? idx : 0);
+        // Auto-select today's tab if inside this new week
+        const idx = getTodayIndex(newWeekDates);
+        setActiveTab(idx !== -1 ? idx : 0);
     };
 
 
@@ -625,87 +635,92 @@ export default function Planning() {
     }
 
     const exportWeekPlanning = () => {
-        if (!employees || employees.length === 0) {
-            alert("No planning data to export!");
+        const doc = new jsPDF({ orientation: "landscape" });
+
+        doc.setFontSize(16);
+        doc.text(
+            `Weekly Planning (from ${weekDates[0]} to ${weekDates[6]})`,
+            20,
+            20
+        );
+
+        const rows = [];
+
+        weekDates.forEach((date, i) => {
+            const dayName = dayNames[i];
+            const dayData = planningDataRefs.current[date] || {};
+
+            posts.forEach(post => {
+                shifts.forEach(shift => {
+                    const key = `${post.id}-${shift.id}`;
+                    const list = dayData[key] || [];
+
+                    if (!list.length) return;
+
+                    rows.push([
+                        date,
+                        dayName,
+                        post.name,
+                        shift.time,
+                        list.map(e => e.employee_name).join(", ")
+                    ]);
+                });
+            });
+        });
+
+        if (!rows.length) {
+            alert("No planning to export");
             return;
         }
 
-        let csvContent = '';
-
-        weekDates.forEach(date => {
-            csvContent += `Date: ${date}\n`;
-
-            const header = ['Post'];
-            shifts.forEach(shift => {
-                header.push(shift.time);
-            });
-            csvContent += header.join(',') + '\n';
-
-            posts.forEach(post => {
-                const row = [post.name];
-                shifts.forEach(shift => {
-                    const dayData = planningDataRefs.current[date] || {};
-                    const key = `${post.id}-${shift.id}`;
-                    const assignment = dayData[key];
-                    row.push(assignment?.employee_name || '');
-                });
-                csvContent += row.join(',') + '\n';
-            });
-
-            csvContent += '\n';
+        autoTable(doc, {
+            head: [["Date", "Day", "Post", "Shift", "Employees"]],
+            body: rows,
+            startY: 40,
+            styles: { fontSize: 10 }
         });
 
-        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-
-        const link = document.createElement('a');
-        link.href = url;
-        link.setAttribute('download', `weekly_planning_${new Date().toISOString().split('T')[0]}.csv`);
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-
-        alert("✅ Weekly planning exported successfully!");
+        doc.save(`weekly_planning_${weekDates[0]}_to_${weekDates[6]}.pdf`);
     };
 
 
-       // 🔥 NEW — remove employee from a cell 
-        const handleRemoveEmployee = (postId, shiftId, emp_id, date) => {
-            const key = `${postId}-${shiftId}`;
+    // 🔥 NEW — remove employee from a cell 
+    const handleRemoveEmployee = (postId, shiftId, emp_id, date) => {
+        const key = `${postId}-${shiftId}`;
 
-            // Safety check
-            if (!planningDataRefs.current[date] || !planningDataRefs.current[date][key]) return;
+        // Safety check
+        if (!planningDataRefs.current[date] || !planningDataRefs.current[date][key]) return;
 
-            // Remove employee directly
-            planningDataRefs.current[date][key] =
-                planningDataRefs.current[date][key].filter(emp => emp.emp_id !== emp_id);
+        // Remove employee directly
+        planningDataRefs.current[date][key] =
+            planningDataRefs.current[date][key].filter(emp => emp.emp_id !== emp_id);
 
-            // Force UI refresh
-            setTick(t => t + 1);
-        };
+        // Force UI refresh
+        setTick(t => t + 1);
+    };
 
 
-        //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
-        const saveWeekPlanning = async () => {
-            try {
-                setSavingWeek(true);
+    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
+    const saveWeekPlanning = async () => {
+        try {
+            setSavingWeek(true);
 
-                for (let i = 0; i < weekDates.length; i++) {
-                    const date = weekDates[i];
+            for (let i = 0; i < weekDates.length; i++) {
+                const date = weekDates[i];
 
-                    // Directly save date (the correct one)
-                    await savePlanning(date, true);
-                }
-
-                alert("Weekly planning saved successfully!");
-
-            } catch (err) {
-                console.error(err);
-                alert("Error saving weekly planning");
-            } finally {
-                setSavingWeek(false);
+                // Directly save date (the correct one)
+                await savePlanning(date, true);
             }
-        };
+
+            alert("Weekly planning saved successfully!");
+
+        } catch (err) {
+            console.error(err);
+            alert("Error saving weekly planning");
+        } finally {
+            setSavingWeek(false);
+        }
+    };
 
 
 
@@ -814,90 +829,90 @@ export default function Planning() {
                                 <td style={{ background: "linear-gradient(to right, #EB4219, #F6892A)", color: "white" }}>
                                     {post.name}
                                 </td>
-                                
+
                                 {shifts.map(shift => (
-                                    
+
                                     <td key={shift.id}>
 
                                         {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).map(emp => (
-                                        <div
-                                            key={emp.emp_id}
-                                            style={{
-                                            position: "relative",       // required for hover buttons
-                                            cursor: "pointer",
-                                            color: "#EB4219",
-                                            fontWeight: "bold",
-                                            padding: "2px 0",
-                                            display: "flex",            // make employee and buttons inline
-                                            alignItems: "center",
-                                            gap: "4px"                  // space between name and buttons
-                                            }}
-                                            onMouseEnter={() => setHoveredEmployee(emp.emp_id)}
-                                            onMouseLeave={() => setHoveredEmployee(null)}
-                                        >
-                                            <span>{emp.name}</span>
-
-                                            {hoveredEmployee === emp.emp_id && (
-                                            <>
-                                                <button
-                                                type="button"
+                                            <div
+                                                key={emp.emp_id}
                                                 style={{
-                                                    fontSize: "14px",
+                                                    position: "relative",       // required for hover buttons
                                                     cursor: "pointer",
-                                                    background: "#4CAF50",
-                                                    color: "white",
-                                                    border: "none",
-                                                    borderRadius: "3px",
-                                                    padding: "2px 6px"
+                                                    color: "#EB4219",
+                                                    fontWeight: "bold",
+                                                    padding: "2px 0",
+                                                    display: "flex",            // make employee and buttons inline
+                                                    alignItems: "center",
+                                                    gap: "4px"                  // space between name and buttons
                                                 }}
-                                                onClick={() => setDropdownVisibleFor(emp.emp_id)}
-                                                >
-                                                +
-                                                </button>
+                                                onMouseEnter={() => setHoveredEmployee(emp.emp_id)}
+                                                onMouseLeave={() => setHoveredEmployee(null)}
+                                            >
+                                                <span>{emp.name}</span>
 
-                                                <button
-                                                type="button"
-                                                style={{
-                                                    fontSize: "14px",
-                                                    cursor: "pointer",
-                                                    background: "#EB4219",
-                                                    color: "white",
-                                                    border: "none",
-                                                    borderRadius: "3px",
-                                                    padding: "2px 6px"
-                                                }}
-                                                onClick={() =>
-                                                    handleRemoveEmployee(post.id, shift.id, emp.emp_id, getCurrentDate())
-                                                }
-                                                >
-                                                -
-                                                </button>
-                                            </>
-                                            )}
+                                                {hoveredEmployee === emp.emp_id && (
+                                                    <>
+                                                        <button
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: "14px",
+                                                                cursor: "pointer",
+                                                                background: "#4CAF50",
+                                                                color: "white",
+                                                                border: "none",
+                                                                borderRadius: "3px",
+                                                                padding: "2px 6px"
+                                                            }}
+                                                            onClick={() => setDropdownVisibleFor(emp.emp_id)}
+                                                        >
+                                                            +
+                                                        </button>
 
-                                            {/* Dropdown for adding another employee */}
-                                            {dropdownVisibleFor === emp.emp_id && (
-                                            <DropDownList
-                                                employees={employees.filter(e =>
-                                                !(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).some(sel => sel.emp_id === e.emp_id)
+                                                        <button
+                                                            type="button"
+                                                            style={{
+                                                                fontSize: "14px",
+                                                                cursor: "pointer",
+                                                                background: "#EB4219",
+                                                                color: "white",
+                                                                border: "none",
+                                                                borderRadius: "3px",
+                                                                padding: "2px 6px"
+                                                            }}
+                                                            onClick={() =>
+                                                                handleRemoveEmployee(post.id, shift.id, emp.emp_id, getCurrentDate())
+                                                            }
+                                                        >
+                                                            -
+                                                        </button>
+                                                    </>
                                                 )}
-                                                onSelect={employee => {
-                                                handleEmployeeSelect(post.id, shift.id, employee, getCurrentDate());
-                                                setDropdownVisibleFor(null);
-                                                }}
-                                            />
-                                            )}
-                                        </div>
+
+                                                {/* Dropdown for adding another employee */}
+                                                {dropdownVisibleFor === emp.emp_id && (
+                                                    <DropDownList
+                                                        employees={employees.filter(e =>
+                                                            !(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).some(sel => sel.emp_id === e.emp_id)
+                                                        )}
+                                                        onSelect={employee => {
+                                                            handleEmployeeSelect(post.id, shift.id, employee, getCurrentDate());
+                                                            setDropdownVisibleFor(null);
+                                                        }}
+                                                    />
+                                                )}
+                                            </div>
                                         ))}
-                                        
+
                                         {/* Initial dropdown if no employees assigned yet */}
                                         {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).length === 0 && (
-                                        <DropDownList
-                                            employees={employees}
-                                            onSelect={employee =>
-                                            handleEmployeeSelect(post.id, shift.id, employee, getCurrentDate())
-                                            }
-                                        />
+                                            <DropDownList
+                                                employees={employees}
+                                                onSelect={employee =>
+                                                    handleEmployeeSelect(post.id, shift.id, employee, getCurrentDate())
+                                                }
+                                            />
                                         )}
                                     </td>
                                 ))}
@@ -925,7 +940,7 @@ export default function Planning() {
                             </h3>
 
                             <p style={{ textAlign: "center", fontSize: "16px", marginTop: "20px" }}>
-                                Employee is added successfully to the cell.  
+                                Employee is added successfully to the cell.
                             </p>
 
                             <div style={{ textAlign: "center", marginTop: "30px" }}>
@@ -954,9 +969,9 @@ export default function Planning() {
 
                 {/* NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW */}
                 <div className='cntbtns' style={{ display: "flex", gap: "15px", marginTop: "30px" }}>
-                    
+
                     {/* Save DAY button */}
-                   <button
+                    <button
                         className='cntbtn'
                         onClick={() => savePlanning(weekDates[activeTab], false)}
                         disabled={saving || savingWeek}
