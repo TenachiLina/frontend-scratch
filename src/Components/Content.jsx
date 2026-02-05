@@ -61,6 +61,10 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   );
 
+
+
+
+
   const filteredEmployees = useMemo(() => {
     if (!currentTab) return [];
 
@@ -85,17 +89,23 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   if (!shift) return {};
 
   filteredEmployees.forEach(emp => {
-    const late = calculateLateMinutes(emp.num, shift);
-    const overtime = calculateOvertimeMinutes(emp.num, shift);
+    const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
+    const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
 
     map[emp.num] = {
-      delay: late,
-      overtime: overtime
+      delay: formatMinutesToTime(calculateLateMinutes(clockIn, shift.shift_id)),
+      overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, shift.shift_id))
     };
   });
 
   return map;
-  }, [filteredEmployees, currentTab, shifts]);
+}, [filteredEmployees, currentTab, shifts, employeeTimes]);
+
+
+
+
+
+
 
   //Load shifts from backend on page load
   useEffect(() => {
