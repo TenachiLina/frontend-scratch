@@ -14,7 +14,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   };
 
-  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
+  // const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
 
     // Save to localStorage
   const saveToLocalStorage = (key, value) => {
@@ -89,6 +89,94 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
+
+  //The second sollution part2:
+  const shiftMap = useMemo(() => {
+  const map = {};
+  shifts.forEach(s => { map[s.shift_id] = s; });
+  return map;
+  }, [shifts]);
+
+  const getShiftById = (shiftId) => {
+  return shiftMap[shiftId] || null;
+  }; 
+
+  const calculateLateMinutes = (clockIn, shiftId) => {
+    if (clockIn === "00:00") return 0;
+
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
+
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    const clockInM = toMinutes(clockIn);
+    let shiftStartM = toMinutes(shift.start_time);
+
+    // overnight safety
+    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
+
+    const late = clockInM - shiftStartM;
+    return late > 0 ? late : 0;
+};
+
+const calculateOvertimeMinutes = (clockOut, shiftId) => {
+    if (clockOut === "00:00") return 0;
+
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
+
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
+
+    let clockOutM = toMinutes(clockOut);
+    let shiftEndM = toMinutes(shift.end_time);
+
+    // handle overnight shift ending at 00:00
+    if (shiftEndM === 0) shiftEndM = 24 * 60;
+    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
+
+    const overtime = clockOutM - shiftEndM;
+    return overtime > 0 ? overtime : 0;
+};
+
+// Format minutes to HH:MM
+const formatMinutesToTime = (totalMinutes) => {
+    if (totalMinutes <= 0) return "00:00";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
+
   //The second sollution part1
   const filteredEmployees = useMemo(() => {
   if (!currentTab) return [];
@@ -127,6 +215,27 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  
+
   //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
@@ -136,19 +245,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     };
     fetchShifts();
   }, []);
- 
-  
 
-  //The second sollution part2:
-  const shiftMap = useMemo(() => {
-  const map = {};
-  shifts.forEach(s => { map[s.shift_id] = s; });
-  return map;
-  }, [shifts]);
-
-  const getShiftById = (shiftId) => {
-  return shiftMap[shiftId] || null;
-  }; 
 
   // const getShiftById = (shiftId) => {
   // if (!shiftId || !shifts.length) return null;
@@ -382,102 +479,58 @@ const saveManualTime = () => {
   setManualInput({ employee: null, type: null, value: "" });
 };
 
-  // Calculate if employee is late
-//   const calculateLateMinutes = (clockIn, shiftNumber) => {
-//     if (clockIn === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-//       return 0;
-//     }
+ 
+// const calculateLateMinutes = (clockIn, shiftId) => {
+//     if (clockIn === "00:00") return 0;
 
-//     const shiftStart = shiftTimes[shiftNumber].start;
-//     const [clockInHours, clockInMinutes] = clockIn.split(':').map(Number);
-//     const [shiftStartHours, shiftStartMinutes] = shiftStart.split(':').map(Number);
+//     const shift = getShiftById(shiftId);
+//     if (!shift) return 0;
 
-//     const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
-//     const shiftStartTotalMinutes = shiftStartHours * 60 + shiftStartMinutes;
+//     const toMinutes = (time) => {
+//       const [h, m] = time.split(":").map(Number);
+//       return h * 60 + m;
+//     };
 
-//     // Handle overnight shifts (shift 3)
-//     let lateMinutes = clockInTotalMinutes - shiftStartTotalMinutes;
+//     const clockInM = toMinutes(clockIn);
+//     let shiftStartM = toMinutes(shift.start_time);
 
-//     // For shift 3 (16:00-00:00), if clock in is after midnight, adjust calculation
-//     if (shiftNumber === 3 && clockInHours < 12) {
-//       lateMinutes = (clockInTotalMinutes + (24 * 60)) - shiftStartTotalMinutes;
-//     }
+//     // overnight safety
+//     if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
 
-//     return lateMinutes > 0 ? lateMinutes : 0; // Return 0 if not late
-//   };
-const calculateLateMinutes = (clockIn, shiftId) => {
-    if (clockIn === "00:00") return 0;
+//     const late = clockInM - shiftStartM;
+//     return late > 0 ? late : 0;
+// };
 
-    const shift = getShiftById(shiftId);
-    if (!shift) return 0;
+// const calculateOvertimeMinutes = (clockOut, shiftId) => {
+//     if (clockOut === "00:00") return 0;
 
-    const toMinutes = (time) => {
-      const [h, m] = time.split(":").map(Number);
-      return h * 60 + m;
-    };
+//     const shift = getShiftById(shiftId);
+//     if (!shift) return 0;
 
-    const clockInM = toMinutes(clockIn);
-    let shiftStartM = toMinutes(shift.start_time);
+//     const toMinutes = (time) => {
+//       const [h, m] = time.split(":").map(Number);
+//       return h * 60 + m;
+//     };
 
-    // overnight safety
-    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
+//     let clockOutM = toMinutes(clockOut);
+//     let shiftEndM = toMinutes(shift.end_time);
 
-    const late = clockInM - shiftStartM;
-    return late > 0 ? late : 0;
-};
+//     // handle overnight shift ending at 00:00
+//     if (shiftEndM === 0) shiftEndM = 24 * 60;
+//     if (clockOutM < shiftEndM) clockOutM += 24 * 60;
 
-
-  // Calculate overtime
-//   const calculateOvertimeMinutes = (clockOut, shiftNumber) => {
-//     if (clockOut === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-//       return 0;
-//     }
-
-//     const shiftEnd = shiftTimes[shiftNumber].end;
-//     const [clockOutHours, clockOutMinutes] = clockOut.split(':').map(Number);
-//     const [shiftEndHours, shiftEndMinutes] = shiftEnd.split(':').map(Number);
-
-//     const clockOutTotalMinutes = clockOutHours * 60 + clockOutMinutes;
-//     let shiftEndTotalMinutes = shiftEndHours * 60 + shiftEndMinutes;
-
-//     // Handle overnight shifts (shift 3 ends at 00:00 which is 24:00)
-//     if (shiftNumber === 3 && shiftEndTotalMinutes === 0) {
-//       shiftEndTotalMinutes = 24 * 60; // 00:00 = 24:00
-//     }
-
-//     const overtimeMinutes = clockOutTotalMinutes - shiftEndTotalMinutes;
-//     return overtimeMinutes > 0 ? overtimeMinutes : 0;
-//   };
-const calculateOvertimeMinutes = (clockOut, shiftId) => {
-    if (clockOut === "00:00") return 0;
-
-    const shift = getShiftById(shiftId);
-    if (!shift) return 0;
-
-    const toMinutes = (time) => {
-      const [h, m] = time.split(":").map(Number);
-      return h * 60 + m;
-    };
-
-    let clockOutM = toMinutes(clockOut);
-    let shiftEndM = toMinutes(shift.end_time);
-
-    // handle overnight shift ending at 00:00
-    if (shiftEndM === 0) shiftEndM = 24 * 60;
-    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
-
-    const overtime = clockOutM - shiftEndM;
-    return overtime > 0 ? overtime : 0;
-};
+//     const overtime = clockOutM - shiftEndM;
+//     return overtime > 0 ? overtime : 0;
+// };
 
 
-// Format minutes to HH:MM
-const formatMinutesToTime = (totalMinutes) => {
-    if (totalMinutes <= 0) return "00:00";
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-};
+// // Format minutes to HH:MM
+// const formatMinutesToTime = (totalMinutes) => {
+//     if (totalMinutes <= 0) return "00:00";
+//     const hours = Math.floor(totalMinutes / 60);
+//     const minutes = totalMinutes % 60;
+//     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+// };
 
 // Calculate hours worked
 const calculateHours = (clockIn, clockOut) => {
