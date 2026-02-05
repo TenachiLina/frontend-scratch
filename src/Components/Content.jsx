@@ -14,7 +14,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   };
 
-  // const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
+  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
 
     // Save to localStorage
   const saveToLocalStorage = (key, value) => {
@@ -36,7 +36,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [editingShift, setEditingShift] = useState(null);
 
   //The correct sollution 1:
-  // const [filteredEmployees, setFilteredEmployees] = useState([]);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
 
   
 
@@ -68,173 +68,24 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   );
 
   //The correct sollution 2
-  // useEffect(() => {
-  //   if (!currentTab) {
-  //     setFilteredEmployees([]);
-  //     return;
-  //   }
+  useEffect(() => {
+    if (!currentTab) {
+      setFilteredEmployees([]);
+      return;
+    }
+
+    const current = String(currentTab);
+    const newFiltered = employees.filter((emp) => {
+      const assignedShifts = selectedShifts[emp.num];
+      if (!assignedShifts) return false;
+      return Array.isArray(assignedShifts)
+        ? assignedShifts.map(String).includes(current)
+        : String(assignedShifts) === current;
+    });
+
+    setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, selectedShifts]); // runs only when these change
 
-  //   const current = String(currentTab);
-  //   const newFiltered = employees.filter((emp) => {
-  //     const assignedShifts = selectedShifts[emp.num];
-  //     if (!assignedShifts) return false;
-  //     return Array.isArray(assignedShifts)
-  //       ? assignedShifts.map(String).includes(current)
-  //       : String(assignedShifts) === current;
-  //   });
-
-  //   setFilteredEmployees(newFiltered);
-  // }, [currentTab, employees, selectedShifts]); // runs only when these change
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
-
-  //The second sollution part2:
-  const shiftMap = useMemo(() => {
-  const map = {};
-  shifts.forEach(s => { map[s.shift_id] = s; });
-  return map;
-  }, [shifts]);
-
-  const getShiftById = (shiftId) => {
-  return shiftMap[shiftId] || null;
-  }; 
-
-  const calculateLateMinutes = (clockIn, shiftId) => {
-    if (clockIn === "00:00") return 0;
-
-    const shift = getShiftById(shiftId);
-    if (!shift) return 0;
-
-    const toMinutes = (time) => {
-      const [h, m] = time.split(":").map(Number);
-      return h * 60 + m;
-    };
-
-    const clockInM = toMinutes(clockIn);
-    let shiftStartM = toMinutes(shift.start_time);
-
-    // overnight safety
-    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
-
-    const late = clockInM - shiftStartM;
-    return late > 0 ? late : 0;
-};
-
-const calculateOvertimeMinutes = (clockOut, shiftId) => {
-    if (clockOut === "00:00") return 0;
-
-    const shift = getShiftById(shiftId);
-    if (!shift) return 0;
-
-    const toMinutes = (time) => {
-      const [h, m] = time.split(":").map(Number);
-      return h * 60 + m;
-    };
-
-    let clockOutM = toMinutes(clockOut);
-    let shiftEndM = toMinutes(shift.end_time);
-
-    // handle overnight shift ending at 00:00
-    if (shiftEndM === 0) shiftEndM = 24 * 60;
-    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
-
-    const overtime = clockOutM - shiftEndM;
-    return overtime > 0 ? overtime : 0;
-};
-
-// Format minutes to HH:MM
-const formatMinutesToTime = (totalMinutes) => {
-    if (totalMinutes <= 0) return "00:00";
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-};
-
-  //The second sollution part1
-  const filteredEmployees = useMemo(() => {
-  if (!currentTab) return [];
-
-  const current = String(currentTab);
-
-  return employees.filter(emp => {
-    const assignedShifts = selectedShifts?.[emp.num];
-    if (!assignedShifts) return false;
-
-    return Array.isArray(assignedShifts)
-      ? assignedShifts.some(s => String(s) === current)
-      : String(assignedShifts) === current;
-  });
-  }, [currentTab, employees, selectedShifts]);
-
-  //third sollution part1:
-  const performanceMap = useMemo(() => {
-  if (!currentTab || !filteredEmployees.length) return {};
-
-  const map = {};
-
-  filteredEmployees.forEach(emp => {
-    const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
-    const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
-
-    map[emp.num] = {
-      delay: formatMinutesToTime(calculateLateMinutes(clockIn, currentTab)),
-      overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, currentTab))
-    };
-  });
-
-  return map;
-  }, [filteredEmployees, employeeTimes, currentTab]);
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-  
 
   //Load shifts from backend on page load
   useEffect(() => {
@@ -247,6 +98,18 @@ const formatMinutesToTime = (totalMinutes) => {
   }, []);
 
 
+  //The second sollution part2:
+  const shiftMap = useMemo(() => {
+  const map = {};
+  shifts.forEach(s => { map[s.shift_id] = s; });
+  return map;
+  }, [shifts]);
+
+  const getShiftById = (shiftId) => {
+  return shiftMap[shiftId] || null;
+  }; 
+
+  
   // const getShiftById = (shiftId) => {
   // if (!shiftId || !shifts.length) return null;
   // return shifts.find(s => s.shift_id === Number(shiftId)) || null;
@@ -480,57 +343,57 @@ const saveManualTime = () => {
 };
 
  
-// const calculateLateMinutes = (clockIn, shiftId) => {
-//     if (clockIn === "00:00") return 0;
+const calculateLateMinutes = (clockIn, shiftId) => {
+    if (clockIn === "00:00") return 0;
 
-//     const shift = getShiftById(shiftId);
-//     if (!shift) return 0;
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
 
-//     const toMinutes = (time) => {
-//       const [h, m] = time.split(":").map(Number);
-//       return h * 60 + m;
-//     };
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
 
-//     const clockInM = toMinutes(clockIn);
-//     let shiftStartM = toMinutes(shift.start_time);
+    const clockInM = toMinutes(clockIn);
+    let shiftStartM = toMinutes(shift.start_time);
 
-//     // overnight safety
-//     if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
+    // overnight safety
+    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
 
-//     const late = clockInM - shiftStartM;
-//     return late > 0 ? late : 0;
-// };
+    const late = clockInM - shiftStartM;
+    return late > 0 ? late : 0;
+};
 
-// const calculateOvertimeMinutes = (clockOut, shiftId) => {
-//     if (clockOut === "00:00") return 0;
+const calculateOvertimeMinutes = (clockOut, shiftId) => {
+    if (clockOut === "00:00") return 0;
 
-//     const shift = getShiftById(shiftId);
-//     if (!shift) return 0;
+    const shift = getShiftById(shiftId);
+    if (!shift) return 0;
 
-//     const toMinutes = (time) => {
-//       const [h, m] = time.split(":").map(Number);
-//       return h * 60 + m;
-//     };
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
 
-//     let clockOutM = toMinutes(clockOut);
-//     let shiftEndM = toMinutes(shift.end_time);
+    let clockOutM = toMinutes(clockOut);
+    let shiftEndM = toMinutes(shift.end_time);
 
-//     // handle overnight shift ending at 00:00
-//     if (shiftEndM === 0) shiftEndM = 24 * 60;
-//     if (clockOutM < shiftEndM) clockOutM += 24 * 60;
+    // handle overnight shift ending at 00:00
+    if (shiftEndM === 0) shiftEndM = 24 * 60;
+    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
 
-//     const overtime = clockOutM - shiftEndM;
-//     return overtime > 0 ? overtime : 0;
-// };
+    const overtime = clockOutM - shiftEndM;
+    return overtime > 0 ? overtime : 0;
+};
 
 
-// // Format minutes to HH:MM
-// const formatMinutesToTime = (totalMinutes) => {
-//     if (totalMinutes <= 0) return "00:00";
-//     const hours = Math.floor(totalMinutes / 60);
-//     const minutes = totalMinutes % 60;
-//     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
-// };
+// Format minutes to HH:MM
+const formatMinutesToTime = (totalMinutes) => {
+    if (totalMinutes <= 0) return "00:00";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+};
 
 // Calculate hours worked
 const calculateHours = (clockIn, clockOut) => {
