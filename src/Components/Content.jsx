@@ -35,7 +35,8 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
 
-  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  //The correct sollution 1:
+  // const [filteredEmployees, setFilteredEmployees] = useState([]);
 
   
 
@@ -66,42 +67,44 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   );
 
-  
-  useEffect(() => {
-    if (!currentTab) {
-      setFilteredEmployees([]);
-      return;
-    }
+  //The correct sollution 2
+  // useEffect(() => {
+  //   if (!currentTab) {
+  //     setFilteredEmployees([]);
+  //     return;
+  //   }
 
-    const current = String(currentTab);
-    const newFiltered = employees.filter((emp) => {
-      const assignedShifts = selectedShifts[emp.num];
-      if (!assignedShifts) return false;
-      return Array.isArray(assignedShifts)
-        ? assignedShifts.map(String).includes(current)
-        : String(assignedShifts) === current;
-    });
+  //   const current = String(currentTab);
+  //   const newFiltered = employees.filter((emp) => {
+  //     const assignedShifts = selectedShifts[emp.num];
+  //     if (!assignedShifts) return false;
+  //     return Array.isArray(assignedShifts)
+  //       ? assignedShifts.map(String).includes(current)
+  //       : String(assignedShifts) === current;
+  //   });
 
-    setFilteredEmployees(newFiltered);
-  }, [currentTab, employees, selectedShifts]); // runs only when these change
-
-
+  //   setFilteredEmployees(newFiltered);
+  // }, [currentTab, employees, selectedShifts]); // runs only when these change
 
 
-//   const filteredEmployees = useMemo(() => {
-//     if (!currentTab) return [];
 
-//     const current = String(currentTab);
 
-//     return employees.filter((emp) => {
-//       const assignedShifts = selectedShifts?.[emp.num];
-//       if (!assignedShifts) return false;
+  //The second sollution part1
+  const filteredEmployees = useMemo(() => {
+  if (!currentTab) return [];
 
-//       return Array.isArray(assignedShifts)
-//         ? assignedShifts.map(String).includes(current)
-//         : String(assignedShifts) === current;
-//     });
-//   }, [currentTab, employees, selectedShifts]);
+  const current = String(currentTab);
+
+  return employees.filter(emp => {
+    const assignedShifts = selectedShifts?.[emp.num];
+    if (!assignedShifts) return false;
+
+    return Array.isArray(assignedShifts)
+      ? assignedShifts.some(s => String(s) === current)
+      : String(assignedShifts) === current;
+  });
+  }, [currentTab, employees, selectedShifts]);
+
 
 
 //   const safeFilteredEmployees = filteredEmployees || [];
@@ -125,12 +128,6 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
 //   return map;
 // }, [filteredEmployees, currentTab, shifts, employeeTimes]);
 
-
-
-
-
-
-
   //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
@@ -143,10 +140,21 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
  
   
 
+  //The second sollution part2:
+  const shiftMap = useMemo(() => {
+  const map = {};
+  shifts.forEach(s => { map[s.shift_id] = s; });
+  return map;
+  }, [shifts]);
+
   const getShiftById = (shiftId) => {
-  if (!shiftId || !shifts.length) return null;
-  return shifts.find(s => s.shift_id === Number(shiftId)) || null;
-  };
+  return shiftMap[shiftId] || null;
+  }; 
+
+  // const getShiftById = (shiftId) => {
+  // if (!shiftId || !shifts.length) return null;
+  // return shifts.find(s => s.shift_id === Number(shiftId)) || null;
+  // };
 
   // DELETE SHIFT
   const handleDeleteShift = async (shiftId) => {
