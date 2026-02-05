@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"; 
 import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js"; 
+import { useMemo } from "react";
 
 export default function Content({ employees, selectedShifts, setSelectedShifts, onEmployeeDeleted }) {
   const loadFromLocalStorage = (key, defaultValue) => {
@@ -32,6 +33,10 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
 
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+
+  
+
   const [manualInput, setManualInput] = useState({
   employee: null,
   type: null,      // "clockIn" or "clockOut"
@@ -58,6 +63,71 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
       };
     }
   );
+
+  
+  useEffect(() => {
+    if (!currentTab) {
+      setFilteredEmployees([]);
+      return;
+    }
+
+    const current = String(currentTab);
+    const newFiltered = employees.filter((emp) => {
+      const assignedShifts = selectedShifts[emp.num];
+      if (!assignedShifts) return false;
+      return Array.isArray(assignedShifts)
+        ? assignedShifts.map(String).includes(current)
+        : String(assignedShifts) === current;
+    });
+
+    setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, selectedShifts]); // runs only when these change
+
+
+
+
+//   const filteredEmployees = useMemo(() => {
+//     if (!currentTab) return [];
+
+//     const current = String(currentTab);
+
+//     return employees.filter((emp) => {
+//       const assignedShifts = selectedShifts?.[emp.num];
+//       if (!assignedShifts) return false;
+
+//       return Array.isArray(assignedShifts)
+//         ? assignedShifts.map(String).includes(current)
+//         : String(assignedShifts) === current;
+//     });
+//   }, [currentTab, employees, selectedShifts]);
+
+
+//   const safeFilteredEmployees = filteredEmployees || [];
+//   const performanceMap = useMemo(() => {
+//   if (!currentTab || !filteredEmployees.length) return {};
+
+//   const map = {};
+//   const shift = shifts.find(s => s.shift_id === Number(currentTab));
+//   if (!shift) return {};
+
+//   safeFilteredEmployees.forEach(emp => {
+//     const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
+//     const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
+
+//     map[emp.num] = {
+//       delay: formatMinutesToTime(calculateLateMinutes(clockIn, shift.shift_id)),
+//       overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, shift.shift_id))
+//     };
+//   });
+
+//   return map;
+// }, [filteredEmployees, currentTab, shifts, employeeTimes]);
+
+
+
+
+
+
 
   //Load shifts from backend on page load
   useEffect(() => {
@@ -574,18 +644,20 @@ const getDisplayOvertime = (employeeNum) => {
     return formatMinutesToTime(overtimeMinutes);
 };
 
-if (!currentTab) { return <div>Waiting for data...</div>; } 
-const filteredEmployees = employees.filter((emp) => { 
-  const current = String(currentTab); 
-  const assignedShifts = selectedShifts[emp.num];
-  // If no shifts assigned → exclude employee 
-  if (!assignedShifts) return false;
-  // Keep employee only if they belong to the current shift 
-  return Array.isArray(assignedShifts) 
-  ? assignedShifts.map(String).includes(current) 
-  : String(assignedShifts) === current; 
-});
+//The sOOOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLUTION
+// if (!currentTab) { return <div>Waiting for data...</div>; } 
+// const filteredEmployees = employees.filter((emp) => { 
+//   const current = String(currentTab); 
+//   const assignedShifts = selectedShifts[emp.num];
+//   // If no shifts assigned → exclude employee 
+//   if (!assignedShifts) return false;
+//   // Keep employee only if they belong to the current shift 
+//   return Array.isArray(assignedShifts) 
+//   ? assignedShifts.map(String).includes(current) 
+//   : String(assignedShifts) === current; 
+// });
 
+if (!currentTab) { return <div>Waiting for data...</div>; }
 return (
     <>
       {(!shifts.length || currentTab === null) ? (
@@ -822,8 +894,10 @@ return (
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-                      const currentDelay = getDisplayDelay(emp.num);
-                      const currentOvertime = getDisplayOvertime(emp.num);
+                      const currentDelay = getDisplayDelay(emp.num);
+                      const currentOvertime = getDisplayOvertime(emp.num);
+                      // const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
+                      // const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
                       return (
                         <tr key={emp.num}
   style={{
@@ -1027,7 +1101,7 @@ return (
             background: "white",
             padding: "20px",
             borderRadius: "8px",
-            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.3)",
             zIndex: 9999
           }}
         >
