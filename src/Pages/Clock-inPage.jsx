@@ -296,7 +296,9 @@ useEffect(() => {
       timeOfWork: workHours.toString(),
       delay: lateMinutes.toString(),
       overtime: overtimeMinutes.toString(),
-      shift: 1
+      shift: 1,
+  absent: false,
+  absentComment: ""
     })
       .then(() => {
         alert("✅ Worktime recorded successfully!");

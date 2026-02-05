@@ -456,6 +456,7 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
       const lateMinutes = calculateLateMinutes(clockIn, shiftNumber);
       const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
       const timeOfWork = calculateHours(clockIn, clockOut);
+console.log("API = ", import.meta.env.VITE_API_BASE_URL);
 
       const workTimeData = {
         employeeId: employeeNum,
@@ -469,7 +470,9 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
         late_minutes: lateMinutes,
         consomation: employeeTimes[employeeNum]?.consomation || 0,
         penalty: employeeTimes[employeeNum]?.penalty || 0,
-        bonus: employeeTimes[employeeNum]?.bonus || 0
+        bonus: employeeTimes[employeeNum]?.bonus || 0,
+        absent: employeeTimes[employeeNum]?.absent ? 1 : 0,
+        absentComment: employeeTimes[employeeNum]?.absentComment || ""
       };
 
       const savedWorkTime = await worktimeApi.saveWorkTime(workTimeData);
@@ -481,7 +484,7 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
           workTimeId: savedWorkTime.id
         }
       }));
-
+console.log('absence:', employeeTimes[employeeNum]?.absentComment);
       console.log('Work time saved successfully:', savedWorkTime);
       return savedWorkTime;
     } catch (error) {
@@ -540,7 +543,9 @@ const clearLocalData = () => {
         workTimeId: null,
         consomation: 0,
         penalty: 0,
-        bonus: 0
+        bonus: 0,
+ absent: false,        // NEW
+  absentComment: ""     // NEW
       };
     });
     return resetTimes;
@@ -790,6 +795,9 @@ return (
               <th>Delay</th>
               <th>Overtime</th>
               <th>Hours</th>
+              <th>Absent?</th>
+              <th>Reason</th>
+
               {/* <th>Operations</th> */}
             </tr>
           </thead>
@@ -817,7 +825,11 @@ return (
                       const currentDelay = getDisplayDelay(emp.num);
                       const currentOvertime = getDisplayOvertime(emp.num);
                       return (
-                        <tr key={emp.num}>
+                        <tr key={emp.num}
+  style={{
+    backgroundColor: employeeTimes[emp.num]?.absent ? '#f8f9fa' : 'transparent',
+    opacity: employeeTimes[emp.num]?.absent ? 0.6 : 1,
+  }}>
                           {/* <td>{emp.num}</td> */}
                           <td>{emp.name}</td>
                           <td>
@@ -946,12 +958,62 @@ return (
 
                        </td>
 
-                          <td>{currentDelay}</td>
-                          <td>{currentOvertime}</td>
-                          <td>{calculateHours(currentClockIn, currentClockOut)}</td>
-                          
-                        </tr>
-                      );})}
+                  <td>{currentDelay}</td>
+                  <td>{currentOvertime}</td>
+                  <td>{calculateHours(currentClockIn, currentClockOut)}</td>
+<td>
+
+  
+  <input 
+    type="checkbox"
+    checked={employeeTimes[emp.num]?.absent || false}
+    onChange={(e) =>
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [emp.num]: {
+          ...prev[emp.num],
+          absent: e.target.checked,
+
+          // If absent is activated, we clear clock-in/out
+          clockIn: e.target.checked ? "00:00" : prev[emp.num].clockIn,
+          clockOut: e.target.checked ? "00:00" : prev[emp.num].clockOut
+        }
+      }))
+    }
+  />
+</td>
+
+<td>
+  <input
+    type="text"
+    value={employeeTimes[emp.num]?.absentComment || ""}
+    disabled={!employeeTimes[emp.num]?.absent}
+    placeholder="Reason"
+    onChange={(e) =>
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [emp.num]: {
+          ...prev[emp.num],
+          absentComment: e.target.value
+        }
+      }))
+    }
+    onBlur={(e) => {
+      // Call saveWorktimeToDB when user finishes typing (leaves the field)
+      if (employeeTimes[emp.num]?.absent && e.target.value.trim()) {
+        saveWorkTimeToDB(emp.num,"00:00","00:00");
+      }
+    }}
+    style={{ width: "150px" }}
+  />
+</td>
+
+
+                  
+</tr>
+
+              );
+            })}
           </tbody>
         </table>
        </div>
