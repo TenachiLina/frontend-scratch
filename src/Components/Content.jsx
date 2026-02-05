@@ -76,7 +76,27 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     });
   }, [currentTab, employees, selectedShifts]);
 
-  
+
+  const performanceMap = useMemo(() => {
+  if (!currentTab || !filteredEmployees.length) return {};
+
+  const map = {};
+  const shift = shifts.find(s => s.shift_id === Number(currentTab));
+  if (!shift) return {};
+
+  filteredEmployees.forEach(emp => {
+    const late = calculateLateMinutes(emp.num, shift);
+    const overtime = calculateOvertimeMinutes(emp.num, shift);
+
+    map[emp.num] = {
+      delay: late,
+      overtime: overtime
+    };
+  });
+
+  return map;
+  }, [filteredEmployees, currentTab, shifts, attendances]);
+
   //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
@@ -834,8 +854,10 @@ return (
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-                      const currentDelay = getDisplayDelay(emp.num);
-                      const currentOvertime = getDisplayOvertime(emp.num);
+        //               const currentDelay = getDisplayDelay(emp.num);
+        //               const currentOvertime = getDisplayOvertime(emp.num);
+                      const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
+                      const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
                       return (
                         <tr key={emp.num}>
                           {/* <td>{emp.num}</td> */}
