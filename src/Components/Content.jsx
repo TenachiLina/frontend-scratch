@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"; 
 import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js"; 
+import { useMemo } from "react";
 
 export default function Content({ employees, selectedShifts, setSelectedShifts, onEmployeeDeleted }) {
   const loadFromLocalStorage = (key, defaultValue) => {
@@ -12,6 +13,8 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
       return defaultValue;
     }
   };
+
+  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
 
     // Save to localStorage
   const saveToLocalStorage = (key, value) => {
@@ -31,6 +34,11 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
+
+  //The correct sollution 1:
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+
+  
 
   const [manualInput, setManualInput] = useState({
   employee: null,
@@ -59,6 +67,26 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   );
 
+  //The correct sollution 2
+  useEffect(() => {
+    if (!currentTab) {
+      setFilteredEmployees([]);
+      return;
+    }
+
+    const current = String(currentTab);
+    const newFiltered = employees.filter((emp) => {
+      const assignedShifts = selectedShifts[emp.num];
+      if (!assignedShifts) return false;
+      return Array.isArray(assignedShifts)
+        ? assignedShifts.map(String).includes(current)
+        : String(assignedShifts) === current;
+    });
+
+    setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, selectedShifts]); // runs only when these change
+
+
   //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
@@ -68,13 +96,24 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     };
     fetchShifts();
   }, []);
- 
-  
+
+
+  //The second sollution part2:
+  const shiftMap = useMemo(() => {
+  const map = {};
+  shifts.forEach(s => { map[s.shift_id] = s; });
+  return map;
+  }, [shifts]);
 
   const getShiftById = (shiftId) => {
-  if (!shiftId || !shifts.length) return null;
-  return shifts.find(s => s.shift_id === Number(shiftId)) || null;
-  };
+  return shiftMap[shiftId] || null;
+  }; 
+
+  
+  // const getShiftById = (shiftId) => {
+  // if (!shiftId || !shifts.length) return null;
+  // return shifts.find(s => s.shift_id === Number(shiftId)) || null;
+  // };
 
   // DELETE SHIFT
   const handleDeleteShift = async (shiftId) => {
@@ -303,29 +342,7 @@ const saveManualTime = () => {
   setManualInput({ employee: null, type: null, value: "" });
 };
 
-  // Calculate if employee is late
-//   const calculateLateMinutes = (clockIn, shiftNumber) => {
-//     if (clockIn === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-//       return 0;
-//     }
-
-//     const shiftStart = shiftTimes[shiftNumber].start;
-//     const [clockInHours, clockInMinutes] = clockIn.split(':').map(Number);
-//     const [shiftStartHours, shiftStartMinutes] = shiftStart.split(':').map(Number);
-
-//     const clockInTotalMinutes = clockInHours * 60 + clockInMinutes;
-//     const shiftStartTotalMinutes = shiftStartHours * 60 + shiftStartMinutes;
-
-//     // Handle overnight shifts (shift 3)
-//     let lateMinutes = clockInTotalMinutes - shiftStartTotalMinutes;
-
-//     // For shift 3 (16:00-00:00), if clock in is after midnight, adjust calculation
-//     if (shiftNumber === 3 && clockInHours < 12) {
-//       lateMinutes = (clockInTotalMinutes + (24 * 60)) - shiftStartTotalMinutes;
-//     }
-
-//     return lateMinutes > 0 ? lateMinutes : 0; // Return 0 if not late
-//   };
+ 
 const calculateLateMinutes = (clockIn, shiftId) => {
     if (clockIn === "00:00") return 0;
 
@@ -347,28 +364,6 @@ const calculateLateMinutes = (clockIn, shiftId) => {
     return late > 0 ? late : 0;
 };
 
-
-  // Calculate overtime
-//   const calculateOvertimeMinutes = (clockOut, shiftNumber) => {
-//     if (clockOut === "00:00" || !shiftNumber || !shiftTimes[shiftNumber]) {
-//       return 0;
-//     }
-
-//     const shiftEnd = shiftTimes[shiftNumber].end;
-//     const [clockOutHours, clockOutMinutes] = clockOut.split(':').map(Number);
-//     const [shiftEndHours, shiftEndMinutes] = shiftEnd.split(':').map(Number);
-
-//     const clockOutTotalMinutes = clockOutHours * 60 + clockOutMinutes;
-//     let shiftEndTotalMinutes = shiftEndHours * 60 + shiftEndMinutes;
-
-//     // Handle overnight shifts (shift 3 ends at 00:00 which is 24:00)
-//     if (shiftNumber === 3 && shiftEndTotalMinutes === 0) {
-//       shiftEndTotalMinutes = 24 * 60; // 00:00 = 24:00
-//     }
-
-//     const overtimeMinutes = clockOutTotalMinutes - shiftEndTotalMinutes;
-//     return overtimeMinutes > 0 ? overtimeMinutes : 0;
-//   };
 const calculateOvertimeMinutes = (clockOut, shiftId) => {
     if (clockOut === "00:00") return 0;
 
@@ -456,6 +451,7 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
       const lateMinutes = calculateLateMinutes(clockIn, shiftNumber);
       const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
       const timeOfWork = calculateHours(clockIn, clockOut);
+console.log("API = ", import.meta.env.VITE_API_BASE_URL);
 
       const workTimeData = {
         employeeId: employeeNum,
@@ -469,7 +465,8 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
         late_minutes: lateMinutes,
         consomation: employeeTimes[employeeNum]?.consomation || 0,
         penalty: employeeTimes[employeeNum]?.penalty || 0,
-        bonus: employeeTimes[employeeNum]?.bonus || 0
+        absent: employeeTimes[employeeNum]?.absent ? 1 : 0,
+        absentComment: employeeTimes[employeeNum]?.absentComment || ""
       };
 
       const savedWorkTime = await worktimeApi.saveWorkTime(workTimeData);
@@ -481,7 +478,7 @@ const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
           workTimeId: savedWorkTime.id
         }
       }));
-
+console.log('absence:', employeeTimes[employeeNum]?.absentComment);
       console.log('Work time saved successfully:', savedWorkTime);
       return savedWorkTime;
     } catch (error) {
@@ -540,7 +537,8 @@ const clearLocalData = () => {
         workTimeId: null,
         consomation: 0,
         penalty: 0,
-        bonus: 0
+ absent: false,        // NEW
+  absentComment: ""     // NEW
       };
     });
     return resetTimes;
@@ -569,6 +567,20 @@ const getDisplayOvertime = (employeeNum) => {
     return formatMinutesToTime(overtimeMinutes);
 };
 
+//The sOOOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLUTION
+// if (!currentTab) { return <div>Waiting for data...</div>; } 
+// const filteredEmployees = employees.filter((emp) => { 
+//   const current = String(currentTab); 
+//   const assignedShifts = selectedShifts[emp.num];
+//   // If no shifts assigned → exclude employee 
+//   if (!assignedShifts) return false;
+//   // Keep employee only if they belong to the current shift 
+//   return Array.isArray(assignedShifts) 
+//   ? assignedShifts.map(String).includes(current) 
+//   : String(assignedShifts) === current; 
+// });
+
+if (!currentTab) { return <div>Waiting for data...</div>; }
 return (
     <>
       {(!shifts.length || currentTab === null) ? (
@@ -774,116 +786,130 @@ return (
               {/* <th>Shift number</th> */}
               <th>Consomation</th>
               <th>Penalty</th>
-              <th>Bonus</th>
               <th>Delay</th>
               <th>Overtime</th>
               <th>Hours</th>
+              <th>Absent?</th>
+              <th>Reason</th>
+
               {/* <th>Operations</th> */}
             </tr>
           </thead>
          <tbody>
-            {
-            employees.filter((emp) => {
-              
-        //     const assignedShifts = selectedShifts[emp.num];
-        //     if (currentTab === null) return true;
-        //     const current = String(currentTab);
-            
-        //     // Check if assignedShifts is an array and includes the current tab number
-        //     if (Array.isArray(assignedShifts)) {
-        //         return assignedShifts.includes(currentShift);
-        //     }
+          {
+          // employees.filter((emp) => {
+          // // if (!currentTab) return true;
+          // if (!currentTab) { return <div>Waiting for data...</div>; }
 
+          // const current = String(currentTab);
+          // const assignedShifts = selectedShifts[emp.num];
 
-        //     // Fallback for single-shift value (though this should be an array now)
-        //     return assignedShifts && assignedShifts.toString() === currentShift;
-              // While loading, show all employees
-          if (!currentTab) return true;
+          // // No shift assignment yet → do not hide employee
+          // // if (!assignedShifts) return true;
+          //  if (!assignedShifts) return false;
 
-          const current = String(currentTab);
-          const assignedShifts = selectedShifts[emp.num];
-
-          // No shift assignment yet → do not hide employee
-          if (!assignedShifts) return true;
-
-          return Array.isArray(assignedShifts)
-            ? assignedShifts.map(String).includes(current)
-            : String(assignedShifts) === current;
-          })
+          // return Array.isArray(assignedShifts)
+          //   ? assignedShifts.map(String).includes(current)
+          //   : String(assignedShifts) === current;
+          // })
+          filteredEmployees
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-                      const currentDelay = getDisplayDelay(emp.num);
-                      const currentOvertime = getDisplayOvertime(emp.num);
+                      const currentDelay = getDisplayDelay(emp.num);
+                      const currentOvertime = getDisplayOvertime(emp.num);
                       return (
-                        <tr key={emp.num}>
+                        <tr key={emp.num}
+  style={{
+    backgroundColor: employeeTimes[emp.num]?.absent ? '#f8f9fa' : 'transparent',
+    opacity: employeeTimes[emp.num]?.absent ? 0.6 : 1,
+  }}>
                           {/* <td>{emp.num}</td> */}
                           <td>{emp.name}</td>
                           <td>
-                            <button
-                              className="time-button"
-                              onClick={() => handleClockIn(emp.num)}
-                              style={{
-                                background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
-                                color: 'white',
-                                border: 'none',
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '14px',
-                                width: '100%'
-                              }}
-                            >
-                              Clock In<br />{currentClockIn}
-                            </button>
-                            <button
-                              style={{
-                                marginTop: "3px",
-                                background: "#ffc107",
-                                color: "black",
-                                padding: "4px 6px",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                width: "100%"
-                              }}
-                              onClick={() => openManualInput(emp.num, "clockIn")}
-                            >
-                              Edit Clock In
-                            </button>
-                          </td>
-                           <td>
-                            <button
-                              className="time-button"
-                              onClick={() => handleClockOut(emp.num)}
-                              style={{
-                                background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '14px',
-                                width: '100%'
-                              }}
-                            >
-                              Clock Out<br />{currentClockOut}
-                            </button>
-                          <button
-                            style={{
-                              marginTop: "3px",
-                              background: "#ffc107",
-                              color: "black",
-                              padding: "4px 6px",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              width: "100%"
-                            }}
-                            onClick={() => openManualInput(emp.num, "clockOut")}
-                          >
-                            Edit Clock Out
-                          </button>
+  {!isAbsent(emp.num) && (
+    <>
+      <button
+        className="time-button"
+        onClick={() => handleClockIn(emp.num)}
+        style={{
+          background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
+          color: 'white',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          width: '100%'
+        }}
+      >
+        Clock In<br />{currentClockIn}
+      </button>
+      <button
+        style={{
+          marginTop: "3px",
+          background: "#ffc107",
+          color: "black",
+          padding: "4px 6px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          width: "100%"
+        }}
+        onClick={() => openManualInput(emp.num, "clockIn")}
+      >
+        Edit Clock In
+      </button>
+    </>
+  )}
+  {isAbsent(emp.num) && (
+    <div style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic' }}>
+      Absent
+    </div>
+  )}
+</td>
 
-                          </td>
+<td>
+  {!isAbsent(emp.num) && (
+    <>
+      <button
+        className="time-button"
+        onClick={() => handleClockOut(emp.num)}
+        style={{
+          background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
+          color: 'white',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          width: '100%'
+        }}
+      >
+        Clock Out<br />{currentClockOut}
+      </button>
+      <button
+        style={{
+          marginTop: "3px",
+          background: "#ffc107",
+          color: "black",
+          padding: "4px 6px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          width: "100%"
+        }}
+        onClick={() => openManualInput(emp.num, "clockOut")}
+      >
+        Edit Clock Out
+      </button>
+    </>
+  )}
+  {isAbsent(emp.num) && (
+    <div style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic' }}>
+      Absent
+    </div>
+  )}
+</td>
+
                         {/*  <td>
                             <div style={{ 
                               textAlign: 'center', 
@@ -927,30 +953,63 @@ return (
                             style={{ width: "80px" }}
                           />
                         </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={employeeTimes[emp.num]?.bonus || ""}
-                            onChange={(e) =>
-                              setEmployeeTimes((prev) => ({
-                                ...prev,
-                                [emp.num]: {
-                                  ...prev[emp.num],
-                                  bonus: e.target.value,
-                                },
-                              }))
-                            }
-                            style={{ width: "80px" }}
-                          />
+                       
+                  <td>{currentDelay}</td>
+                  <td>{currentOvertime}</td>
+                  <td>{calculateHours(currentClockIn, currentClockOut)}</td>
+<td>
 
-                       </td>
+  
+  <input 
+    type="checkbox"
+    checked={employeeTimes[emp.num]?.absent || false}
+    onChange={(e) =>
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [emp.num]: {
+          ...prev[emp.num],
+          absent: e.target.checked,
 
-                          <td>{currentDelay}</td>
-                          <td>{currentOvertime}</td>
-                          <td>{calculateHours(currentClockIn, currentClockOut)}</td>
-                          
-                        </tr>
-                      );})}
+          // If absent is activated, we clear clock-in/out
+          clockIn: e.target.checked ? "00:00" : prev[emp.num].clockIn,
+          clockOut: e.target.checked ? "00:00" : prev[emp.num].clockOut
+        }
+      }))
+    }
+  />
+</td>
+
+<td>
+  <input
+    type="text"
+    value={employeeTimes[emp.num]?.absentComment || ""}
+    disabled={!employeeTimes[emp.num]?.absent}
+    placeholder="Reason"
+    onChange={(e) =>
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [emp.num]: {
+          ...prev[emp.num],
+          absentComment: e.target.value
+        }
+      }))
+    }
+    onBlur={(e) => {
+      // Call saveWorktimeToDB when user finishes typing (leaves the field)
+      if (employeeTimes[emp.num]?.absent && e.target.value.trim()) {
+        saveWorkTimeToDB(emp.num,"00:00","00:00");
+      }
+    }}
+    style={{ width: "150px" }}
+  />
+</td>
+
+
+                  
+</tr>
+
+              );
+            })}
           </tbody>
         </table>
        </div>
@@ -964,7 +1023,7 @@ return (
             background: "white",
             padding: "20px",
             borderRadius: "8px",
-            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.3)",
             zIndex: 9999
           }}
         >

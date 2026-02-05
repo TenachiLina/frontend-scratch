@@ -64,7 +64,6 @@ export default function ReportingContent({
                     work_hours: existing.work_hours || null,
                     late_minutes: existing.late_minutes || 0,
                     overtime_minutes: existing.overtime_minutes || 0,
-                    bonus: existing.bonus || 0,
                     penalty: existing.penalty || 0,
                     consommation: existing.consommation || 0,
                     salary: Number(existing.salary || 0),
@@ -76,7 +75,6 @@ export default function ReportingContent({
                     work_hours: null,
                     late_minutes: 0,
                     overtime_minutes: 0,
-                    bonus: 0,
                     penalty: 0,
                     consommation: 0,
                     salary: 0,
@@ -93,8 +91,10 @@ export default function ReportingContent({
         const empIdRow = Number(row.emp_id);
         const employee = employeeList.find((e) => Number(e.emp_id) === empIdRow);
         const baseSalary = Number(employee?.Base_salary || 0);
-        const workHours = parseFloat(row.work_hours || 0);
-
+        const workHours = timeToDecimalHours(row.work_hours || "00:00");
+console.log("row.work_hours", row.work_hours)
+        
+console.log("workHours", workHours)
         if (!baseSalary || !workHours) return { salary: "0.00", baseSalary };
 
         const hourlyRate = baseSalary / 8 / 26; // 8 hours/day, 26 days/month
@@ -103,6 +103,13 @@ export default function ReportingContent({
         return { salary: salary.toFixed(2), baseSalary };
     };
 
+// ✅ Helper function to convert "HH:MM" → decimal hours
+const timeToDecimalHours = (timeStr) => {
+    if (!timeStr || timeStr === "00:00") return 0;
+    
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    return hours + (minutes / 60);
+};
     /* ================= WEEK SUMMARY ================= */
     const weekSummary = useMemo(() => {
         if (!localRows.length) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0 };
@@ -114,7 +121,7 @@ export default function ReportingContent({
 
         const hourlyRate = baseSalary / 8 / 26;
 
-        const totalHours = localRows.reduce((sum, r) => sum + (parseFloat(r.work_hours) || 0), 0);
+        const totalHours = localRows.reduce((sum, r) => sum + timeToDecimalHours(r.work_hours || "00:00"), 0);
         const totalConsommation = localRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
         const totalLate = localRows.reduce((sum, r) => sum + (parseFloat(r.late_minutes) || 0), 0);
         const totalPenalties = localRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
@@ -147,7 +154,7 @@ export default function ReportingContent({
 
         const hourlyRate = baseSalary / 8 / 26;
 
-        const totalHours = localRows.reduce((sum, r) => sum + (parseFloat(r.work_hours) || 0), 0);
+        const totalHours = localRows.reduce((sum, r) => sum +timeToDecimalHours(r.work_hours || "00:00"), 0);
         const totalPenalties = localRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
         const totalAdvancesGiven = advanceGiven ? weekSummary.advance : 0; // ✅ include weekly advance checkbox
         const totalConsommation = localRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);

@@ -23,7 +23,7 @@ export default function Planning() {
         const today = new Date();
         const currentDay = today.getDay(); // 0=Sun, 6=Sat
 
-        // find last Saturday (or today if today is Saturday)
+        // last Saturday
         const saturday = new Date(today);
         const diff = (currentDay + 1) % 7;
         saturday.setDate(today.getDate() - diff);
@@ -31,11 +31,19 @@ export default function Planning() {
         for (let i = 0; i < 7; i++) {
             const date = new Date(saturday);
             date.setDate(saturday.getDate() + i);
-            dates.push(date.toISOString().split('T')[0]);
+
+            const localDate = new Date(
+                date.getTime() - date.getTimezoneOffset() * 60000
+            )
+                .toISOString()
+                .split("T")[0];
+
+            dates.push(localDate);
         }
 
         return dates;
     };
+
 
 
     const [weekDates, setWeekDates] = useState(getWeekDates());
@@ -43,9 +51,16 @@ export default function Planning() {
     //NEWWWWWWWWWWWWWWWWW
     // Returns the index of today's date inside the week array
     const getTodayIndex = (week) => {
-        const todayStr = new Date().toISOString().split('T')[0];
-        return week.indexOf(todayStr);
+        const now = new Date();
+        const localToday = new Date(
+            now.getTime() - now.getTimezoneOffset() * 60000
+        )
+            .toISOString()
+            .split("T")[0];
+
+        return week.indexOf(localToday);
     };
+
 
     const [isOpen, setIsOpen] = useState(false);
     const [employees, setEmployees] = useState([]);
