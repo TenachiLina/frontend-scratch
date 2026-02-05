@@ -31,6 +31,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
 
   const [manualInput, setManualInput] = useState({
   employee: null,
@@ -58,6 +59,30 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
       };
     }
   );
+
+ 
+  
+
+  useEffect(() => {
+  if (!currentTab) {
+    setFilteredEmployees([]);
+    return;
+  }
+
+  const current = String(currentTab);
+  const newFiltered = employees.filter((emp) => {
+    const assignedShifts = selectedShifts[emp.num];
+    if (!assignedShifts) return false;
+    return Array.isArray(assignedShifts)
+      ? assignedShifts.map(String).includes(current)
+      : String(assignedShifts) === current;
+  });
+
+  setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, selectedShifts]); // runs only when these change
+
+
+
 
   //Load shifts from backend on page load
   useEffect(() => {
@@ -569,18 +594,20 @@ const getDisplayOvertime = (employeeNum) => {
     return formatMinutesToTime(overtimeMinutes);
 };
 
-if (!currentTab) { return <div>Waiting for data...</div>; } 
-const filteredEmployees = employees.filter((emp) => { 
-  const current = String(currentTab); 
-  const assignedShifts = selectedShifts[emp.num];
-  // If no shifts assigned → exclude employee 
-  if (!assignedShifts) return false;
-  // Keep employee only if they belong to the current shift 
-  return Array.isArray(assignedShifts) 
-  ? assignedShifts.map(String).includes(current) 
-  : String(assignedShifts) === current; 
-});
+//The sOOOOOOOOOOOOOOOOOOOOOLLLLLLLLLLLLLLLLLLLLLLUTION
+// if (!currentTab) { return <div>Waiting for data...</div>; } 
+// const filteredEmployees = employees.filter((emp) => { 
+//   const current = String(currentTab); 
+//   const assignedShifts = selectedShifts[emp.num];
+//   // If no shifts assigned → exclude employee 
+//   if (!assignedShifts) return false;
+//   // Keep employee only if they belong to the current shift 
+//   return Array.isArray(assignedShifts) 
+//   ? assignedShifts.map(String).includes(current) 
+//   : String(assignedShifts) === current; 
+// });
 
+if (!currentTab) { return <div>Waiting for data...</div>; }
 return (
     <>
       {(!shifts.length || currentTab === null) ? (
@@ -965,7 +992,7 @@ return (
             background: "white",
             padding: "20px",
             borderRadius: "8px",
-            boxShadow: "0 0 10px rgba(0,0,0,0.3)",
+            boxShadow: "0 0 10px rgba(0, 0, 0, 0.3)",
             zIndex: 9999
           }}
         >
