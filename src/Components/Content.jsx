@@ -32,6 +32,9 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
+
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+
   
 
   const [manualInput, setManualInput] = useState({
@@ -61,46 +64,64 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   );
 
-
-
-
-
-  const filteredEmployees = useMemo(() => {
-    if (!currentTab) return [];
+  
+  useEffect(() => {
+    if (!currentTab) {
+      setFilteredEmployees([]);
+      return;
+    }
 
     const current = String(currentTab);
-
-    return employees.filter((emp) => {
-      const assignedShifts = selectedShifts?.[emp.num];
+    const newFiltered = employees.filter((emp) => {
+      const assignedShifts = selectedShifts[emp.num];
       if (!assignedShifts) return false;
-
       return Array.isArray(assignedShifts)
         ? assignedShifts.map(String).includes(current)
         : String(assignedShifts) === current;
     });
-  }, [currentTab, employees, selectedShifts]);
+
+    setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, selectedShifts]); // runs only when these change
 
 
-  const safeFilteredEmployees = filteredEmployees || [];
-  const performanceMap = useMemo(() => {
-  if (!currentTab || !filteredEmployees.length) return {};
 
-  const map = {};
-  const shift = shifts.find(s => s.shift_id === Number(currentTab));
-  if (!shift) return {};
 
-  safeFilteredEmployees.forEach(emp => {
-    const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
-    const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
+//   const filteredEmployees = useMemo(() => {
+//     if (!currentTab) return [];
 
-    map[emp.num] = {
-      delay: formatMinutesToTime(calculateLateMinutes(clockIn, shift.shift_id)),
-      overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, shift.shift_id))
-    };
-  });
+//     const current = String(currentTab);
 
-  return map;
-}, [filteredEmployees, currentTab, shifts, employeeTimes]);
+//     return employees.filter((emp) => {
+//       const assignedShifts = selectedShifts?.[emp.num];
+//       if (!assignedShifts) return false;
+
+//       return Array.isArray(assignedShifts)
+//         ? assignedShifts.map(String).includes(current)
+//         : String(assignedShifts) === current;
+//     });
+//   }, [currentTab, employees, selectedShifts]);
+
+
+//   const safeFilteredEmployees = filteredEmployees || [];
+//   const performanceMap = useMemo(() => {
+//   if (!currentTab || !filteredEmployees.length) return {};
+
+//   const map = {};
+//   const shift = shifts.find(s => s.shift_id === Number(currentTab));
+//   if (!shift) return {};
+
+//   safeFilteredEmployees.forEach(emp => {
+//     const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
+//     const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
+
+//     map[emp.num] = {
+//       delay: formatMinutesToTime(calculateLateMinutes(clockIn, shift.shift_id)),
+//       overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, shift.shift_id))
+//     };
+//   });
+
+//   return map;
+// }, [filteredEmployees, currentTab, shifts, employeeTimes]);
 
 
 
@@ -865,10 +886,10 @@ return (
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-        //               const currentDelay = getDisplayDelay(emp.num);
-        //               const currentOvertime = getDisplayOvertime(emp.num);
-                      const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
-                      const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
+                      const currentDelay = getDisplayDelay(emp.num);
+                      const currentOvertime = getDisplayOvertime(emp.num);
+                      // const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
+                      // const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
                       return (
                         <tr key={emp.num}>
                           {/* <td>{emp.num}</td> */}
