@@ -540,7 +540,6 @@ console.log("API = ", import.meta.env.VITE_API_BASE_URL);
         late_minutes: lateMinutes,
         consomation: employeeTimes[employeeNum]?.consomation || 0,
         penalty: employeeTimes[employeeNum]?.penalty || 0,
-        bonus: employeeTimes[employeeNum]?.bonus || 0,
         absent: employeeTimes[employeeNum]?.absent ? 1 : 0,
         absentComment: employeeTimes[employeeNum]?.absentComment || ""
       };
@@ -613,7 +612,6 @@ const clearLocalData = () => {
         workTimeId: null,
         consomation: 0,
         penalty: 0,
-        bonus: 0,
  absent: false,        // NEW
   absentComment: ""     // NEW
       };
@@ -863,7 +861,6 @@ return (
               {/* <th>Shift number</th> */}
               <th>Consomation</th>
               <th>Penalty</th>
-              <th>Bonus</th>
               <th>Delay</th>
               <th>Overtime</th>
               <th>Hours</th>
@@ -1014,24 +1011,7 @@ return (
                             style={{ width: "80px" }}
                           />
                         </td>
-                        <td>
-                          <input
-                            type="number"
-                            value={employeeTimes[emp.num]?.bonus || ""}
-                            onChange={(e) =>
-                              setEmployeeTimes((prev) => ({
-                                ...prev,
-                                [emp.num]: {
-                                  ...prev[emp.num],
-                                  bonus: e.target.value,
-                                },
-                              }))
-                            }
-                            style={{ width: "80px" }}
-                          />
-
-                       </td>
-
+                       
                   <td>{currentDelay}</td>
                   <td>{currentOvertime}</td>
                   <td>{calculateHours(currentClockIn, currentClockOut)}</td>
