@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react"; 
 import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js"; 
+import { useMemo } from "react";
 
 export default function Content({ employees, selectedShifts, setSelectedShifts, onEmployeeDeleted }) {
   const loadFromLocalStorage = (key, defaultValue) => {
@@ -31,7 +32,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const [newShift, setNewShift] = useState({ start_time: "", end_time: "" });
   const [showEditForm, setShowEditForm] = useState(false);
   const [editingShift, setEditingShift] = useState(null);
-  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  
 
   const [manualInput, setManualInput] = useState({
   employee: null,
@@ -60,30 +61,22 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   );
 
- 
+  const filteredEmployees = useMemo(() => {
+    if (!currentTab) return [];
+
+    const current = String(currentTab);
+
+    return employees.filter((emp) => {
+      const assignedShifts = selectedShifts[emp.num];
+      if (!assignedShifts) return false;
+
+      return Array.isArray(assignedShifts)
+        ? assignedShifts.map(String).includes(current)
+        : String(assignedShifts) === current;
+    });
+  }, [currentTab, employees, selectedShifts]);
+
   
-
-  useEffect(() => {
-  if (!currentTab) {
-    setFilteredEmployees([]);
-    return;
-  }
-
-  const current = String(currentTab);
-  const newFiltered = employees.filter((emp) => {
-    const assignedShifts = selectedShifts[emp.num];
-    if (!assignedShifts) return false;
-    return Array.isArray(assignedShifts)
-      ? assignedShifts.map(String).includes(current)
-      : String(assignedShifts) === current;
-  });
-
-  setFilteredEmployees(newFiltered);
-  }, [currentTab, employees, selectedShifts]); // runs only when these change
-
-
-
-
   //Load shifts from backend on page load
   useEffect(() => {
     const fetchShifts = async () => {
