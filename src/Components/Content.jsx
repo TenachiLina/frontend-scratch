@@ -71,7 +71,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     const current = String(currentTab);
 
     return employees.filter((emp) => {
-      const assignedShifts = selectedShifts[emp.num];
+      const assignedShifts = selectedShifts?.[emp.num];
       if (!assignedShifts) return false;
 
       return Array.isArray(assignedShifts)
@@ -81,6 +81,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   }, [currentTab, employees, selectedShifts]);
 
 
+  const safeFilteredEmployees = filteredEmployees || [];
   const performanceMap = useMemo(() => {
   if (!currentTab || !filteredEmployees.length) return {};
 
@@ -88,7 +89,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   const shift = shifts.find(s => s.shift_id === Number(currentTab));
   if (!shift) return {};
 
-  filteredEmployees.forEach(emp => {
+  safeFilteredEmployees.forEach(emp => {
     const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
     const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
 
