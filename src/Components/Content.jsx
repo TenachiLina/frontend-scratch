@@ -105,28 +105,27 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   });
   }, [currentTab, employees, selectedShifts]);
 
+  //third sollution part1:
+  const performanceMap = useMemo(() => {
+  if (!currentTab || !filteredEmployees.length) return {};
+
+  const map = {};
+
+  filteredEmployees.forEach(emp => {
+    const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
+    const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
+
+    map[emp.num] = {
+      delay: formatMinutesToTime(calculateLateMinutes(clockIn, currentTab)),
+      overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, currentTab))
+    };
+  });
+
+  return map;
+  }, [filteredEmployees, employeeTimes, currentTab]);
 
 
-//   const safeFilteredEmployees = filteredEmployees || [];
-//   const performanceMap = useMemo(() => {
-//   if (!currentTab || !filteredEmployees.length) return {};
 
-//   const map = {};
-//   const shift = shifts.find(s => s.shift_id === Number(currentTab));
-//   if (!shift) return {};
-
-//   safeFilteredEmployees.forEach(emp => {
-//     const clockIn = employeeTimes[emp.num]?.clockIn || "00:00";
-//     const clockOut = employeeTimes[emp.num]?.clockOut || "00:00";
-
-//     map[emp.num] = {
-//       delay: formatMinutesToTime(calculateLateMinutes(clockIn, shift.shift_id)),
-//       overtime: formatMinutesToTime(calculateOvertimeMinutes(clockOut, shift.shift_id))
-//     };
-//   });
-
-//   return map;
-// }, [filteredEmployees, currentTab, shifts, employeeTimes]);
 
   //Load shifts from backend on page load
   useEffect(() => {
@@ -901,10 +900,10 @@ return (
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-                      const currentDelay = getDisplayDelay(emp.num);
-                      const currentOvertime = getDisplayOvertime(emp.num);
-                      // const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
-                      // const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
+        //               const currentDelay = getDisplayDelay(emp.num);
+        //               const currentOvertime = getDisplayOvertime(emp.num);
+                      const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
+                      const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
                       return (
                         <tr key={emp.num}
   style={{
