@@ -569,6 +569,18 @@ const getDisplayOvertime = (employeeNum) => {
     return formatMinutesToTime(overtimeMinutes);
 };
 
+if (!currentTab) { return <div>Waiting for data...</div>; } 
+const filteredEmployees = employees.filter((emp) => { 
+  const current = String(currentTab); 
+  const assignedShifts = selectedShifts[emp.num];
+  // If no shifts assigned → exclude employee 
+  if (!assignedShifts) return false;
+  // Keep employee only if they belong to the current shift 
+  return Array.isArray(assignedShifts) 
+  ? assignedShifts.map(String).includes(current) 
+  : String(assignedShifts) === current; 
+});
+
 return (
     <>
       {(!shifts.length || currentTab === null) ? (
@@ -782,34 +794,23 @@ return (
             </tr>
           </thead>
          <tbody>
-            {
-            employees.filter((emp) => {
-              
-        //     const assignedShifts = selectedShifts[emp.num];
-        //     if (currentTab === null) return true;
-        //     const current = String(currentTab);
-            
-        //     // Check if assignedShifts is an array and includes the current tab number
-        //     if (Array.isArray(assignedShifts)) {
-        //         return assignedShifts.includes(currentShift);
-        //     }
+          {
+          // employees.filter((emp) => {
+          // // if (!currentTab) return true;
+          // if (!currentTab) { return <div>Waiting for data...</div>; }
 
+          // const current = String(currentTab);
+          // const assignedShifts = selectedShifts[emp.num];
 
-        //     // Fallback for single-shift value (though this should be an array now)
-        //     return assignedShifts && assignedShifts.toString() === currentShift;
-              // While loading, show all employees
-          if (!currentTab) return true;
+          // // No shift assignment yet → do not hide employee
+          // // if (!assignedShifts) return true;
+          //  if (!assignedShifts) return false;
 
-          const current = String(currentTab);
-          const assignedShifts = selectedShifts[emp.num];
-
-          // No shift assignment yet → do not hide employee
-          if (!assignedShifts) return true;
-
-          return Array.isArray(assignedShifts)
-            ? assignedShifts.map(String).includes(current)
-            : String(assignedShifts) === current;
-          })
+          // return Array.isArray(assignedShifts)
+          //   ? assignedShifts.map(String).includes(current)
+          //   : String(assignedShifts) === current;
+          // })
+          filteredEmployees
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
