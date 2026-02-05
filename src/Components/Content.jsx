@@ -14,6 +14,8 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   };
 
+  const isAbsent = (empNum) => employeeTimes[empNum]?.absent === true;
+
     // Save to localStorage
   const saveToLocalStorage = (key, value) => {
       try {
@@ -904,70 +906,89 @@ return (
                           {/* <td>{emp.num}</td> */}
                           <td>{emp.name}</td>
                           <td>
-                            <button
-                              className="time-button"
-                              onClick={() => handleClockIn(emp.num)}
-                              style={{
-                                background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
-                                color: 'white',
-                                border: 'none',
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '14px',
-                                width: '100%'
-                              }}
-                            >
-                              Clock In<br />{currentClockIn}
-                            </button>
-                            <button
-                              style={{
-                                marginTop: "3px",
-                                background: "#ffc107",
-                                color: "black",
-                                padding: "4px 6px",
-                                borderRadius: "4px",
-                                cursor: "pointer",
-                                width: "100%"
-                              }}
-                              onClick={() => openManualInput(emp.num, "clockIn")}
-                            >
-                              Edit Clock In
-                            </button>
-                          </td>
-                           <td>
-                            <button
-                              className="time-button"
-                              onClick={() => handleClockOut(emp.num)}
-                              style={{
-                                background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
-                                color: 'white',
-                                border: 'none',
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '14px',
-                                width: '100%'
-                              }}
-                            >
-                              Clock Out<br />{currentClockOut}
-                            </button>
-                          <button
-                            style={{
-                              marginTop: "3px",
-                              background: "#ffc107",
-                              color: "black",
-                              padding: "4px 6px",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              width: "100%"
-                            }}
-                            onClick={() => openManualInput(emp.num, "clockOut")}
-                          >
-                            Edit Clock Out
-                          </button>
+  {!isAbsent(emp.num) && (
+    <>
+      <button
+        className="time-button"
+        onClick={() => handleClockIn(emp.num)}
+        style={{
+          background: currentClockIn === "00:00" ? '#6c757d' : '#28a745',
+          color: 'white',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          width: '100%'
+        }}
+      >
+        Clock In<br />{currentClockIn}
+      </button>
+      <button
+        style={{
+          marginTop: "3px",
+          background: "#ffc107",
+          color: "black",
+          padding: "4px 6px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          width: "100%"
+        }}
+        onClick={() => openManualInput(emp.num, "clockIn")}
+      >
+        Edit Clock In
+      </button>
+    </>
+  )}
+  {isAbsent(emp.num) && (
+    <div style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic' }}>
+      Absent
+    </div>
+  )}
+</td>
 
-                          </td>
+<td>
+  {!isAbsent(emp.num) && (
+    <>
+      <button
+        className="time-button"
+        onClick={() => handleClockOut(emp.num)}
+        style={{
+          background: currentClockOut === "00:00" ? '#6c757d' : '#dc3545',
+          color: 'white',
+          border: 'none',
+          padding: '8px 12px',
+          borderRadius: '4px',
+          cursor: 'pointer',
+          fontSize: '14px',
+          width: '100%'
+        }}
+      >
+        Clock Out<br />{currentClockOut}
+      </button>
+      <button
+        style={{
+          marginTop: "3px",
+          background: "#ffc107",
+          color: "black",
+          padding: "4px 6px",
+          borderRadius: "4px",
+          cursor: "pointer",
+          width: "100%"
+        }}
+        onClick={() => openManualInput(emp.num, "clockOut")}
+      >
+        Edit Clock Out
+      </button>
+    </>
+  )}
+  {isAbsent(emp.num) && (
+    <div style={{ textAlign: 'center', color: '#6c757d', fontStyle: 'italic' }}>
+      Absent
+    </div>
+  )}
+</td>
+
                         {/*  <td>
                             <div style={{ 
                               textAlign: 'center', 
