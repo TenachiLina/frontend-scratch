@@ -816,10 +816,8 @@ return (
           .map((emp) => {
                       const currentClockIn = getEmployeeTime(emp.num, 'clockIn');
                       const currentClockOut = getEmployeeTime(emp.num, 'clockOut');
-        //               const currentDelay = getDisplayDelay(emp.num);
-        //               const currentOvertime = getDisplayOvertime(emp.num);
-                      const currentDelay = performanceMap[emp.num]?.delay ?? "00:00";
-                      const currentOvertime = performanceMap[emp.num]?.overtime ?? "00:00";
+                      const currentDelay = getDisplayDelay(emp.num);
+                      const currentOvertime = getDisplayOvertime(emp.num);
                       return (
                         <tr key={emp.num}
   style={{
