@@ -95,7 +95,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   });
 
   return map;
-  }, [filteredEmployees, currentTab, shifts, attendances]);
+  }, [filteredEmployees, currentTab, shifts]);
 
   //Load shifts from backend on page load
   useEffect(() => {
