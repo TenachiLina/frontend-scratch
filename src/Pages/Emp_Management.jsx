@@ -14,6 +14,7 @@ export default function Emp_Management() {
   const [editingId, setEditingId] = useState(null);
 
   const [employeeForm, setEmployeeForm] = useState({
+    emp_number: "",
     personal_image: null,
     name: "",
     Base_salary: "",
@@ -67,15 +68,25 @@ export default function Emp_Management() {
           return newList;
         });
       } else {
-        // Check for duplicates locally first
-        const isDuplicate = employees.some(
+        let duplicateMessages = [];
+
+        // Check employee number
+        const empNumberDuplicate = employees.some(
+          (emp) => emp.emp_number === Number(employeeForm.emp_number)
+        );
+        if (empNumberDuplicate) duplicateMessages.push("Employee number");
+
+        // Check name + phone combination
+        const namePhoneDuplicate = employees.some(
           (emp) =>
             emp.name.trim().toLowerCase() === employeeForm.name.trim().toLowerCase() &&
             emp.phone_number.trim() === employeeForm.phone_number.trim()
         );
+        if (namePhoneDuplicate) duplicateMessages.push("Name & Phone");
 
-        if (isDuplicate) {
-          alert("⚠️ This employee already exists in the table!");
+        // If any duplicates found, alert
+        if (duplicateMessages.length > 0) {
+          alert(`⚠️ Duplicate found in: ${duplicateMessages.join(", ")} ⚠️`);
           return;
         }
 
@@ -102,6 +113,7 @@ export default function Emp_Management() {
       setIsEditing(false);
       setEditingId(null);
       setEmployeeForm({
+        emp_number: "",
         personal_image: null,
         name: "",
         Base_salary: "",
@@ -116,22 +128,32 @@ export default function Emp_Management() {
 
   // DELETE
   async function handleDelete(emp_id) {
-    try {
-      await employeesApi.deleteEmployee(emp_id);
-      //Tell the reporting page After adding or deleting
-      localStorage.setItem("employees_updated", Date.now()); // just a timestamp
+  // Ask user for confirmation first
+  const confirmed = window.confirm("⚠️ Are you sure you want to delete this employee?");
 
-      // Update local state and cache
-      setEmployees((prev) => {
-        const newList = prev.filter((e) => e.emp_id !== emp_id);
-        employeesCache = newList;
-        return newList;
-      });
-    } catch (error) {
-      console.error(error);
-      alert("❌ Failed to delete employee");
-    }
+  if (!confirmed) return; // User canceled
+
+  try {
+    await employeesApi.deleteEmployee(emp_id);
+
+    // Tell reporting page after adding or deleting
+    localStorage.setItem("employees_updated", Date.now()); // just a timestamp
+
+    // Update local state and cache
+    setEmployees((prev) => {
+      const newList = prev.filter((e) => e.emp_id !== emp_id);
+      employeesCache = newList;
+      return newList;
+    });
+
+    // Show success confirmation
+    alert("✅ Employee deleted successfully!");
+  } catch (error) {
+    console.error(error);
+    alert("❌ Failed to delete employee");
   }
+  }
+
 
   // EDIT
   function handleEdit(emp) {
@@ -139,6 +161,7 @@ export default function Emp_Management() {
     setEditingId(emp.emp_id);
 
     setEmployeeForm({
+      emp_number: emp.emp_number,
       personal_image: null, // image optional
       name: emp.name,
       Base_salary: emp.Base_salary,
@@ -165,6 +188,7 @@ export default function Emp_Management() {
               setEditingId(null);
               setEmployeeForm({
                 personal_image: null,
+                emp_number: "",
                 name: "",
                 Base_salary: "",
                 address: "",
@@ -180,6 +204,7 @@ export default function Emp_Management() {
           <table>
             <thead>
               <tr>
+                <th>Employee number</th>
                 <th>Photo</th>
                 <th>Full Name</th>
                 <th>Base Salary</th>
@@ -199,6 +224,7 @@ export default function Emp_Management() {
               ) : (
                 employees.map((emp) => (
                   <tr key={emp.emp_id}>
+                    <td>{emp.emp_number}</td>
                     <td>
                       <img
                         src={emp.photoUrl ? emp.photoUrl : Profile}
@@ -232,6 +258,9 @@ export default function Emp_Management() {
               <h3>{isEditing ? "Edit Employee" : "Add Employee"}</h3>
 
               <form onSubmit={(e) => e.preventDefault()}>
+                <label>Employee Number:</label>
+                <input type="number" name="emp_number" value={employeeForm.emp_number} onChange={handleChange} />
+
                 <label>Personal Image:</label>
                 <input type="file" name="personal_image" accept="image/*" onChange={handleChange} />
 
@@ -246,6 +275,7 @@ export default function Emp_Management() {
 
                 <label>Phone:</label>
                 <input type="text" name="phone_number" value={employeeForm.phone_number} onChange={handleChange} />
+
 
                 <div className="form-actions">
                   <button type="button" onClick={() => setShowForm(false)}>
