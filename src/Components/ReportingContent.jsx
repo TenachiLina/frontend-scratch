@@ -1,32 +1,59 @@
-import React, { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
+import { API_BASE_URL } from "../services/config";
 
 export default function ReportingContent({
     rows = [],
     summary = null,
     startEnd = { start: "", end: "" },
     employeeId = null,
-    employeeList = [], // list of all employees with base_salary
+    employeeList = [],
     onSavedComment,
 }) {
     console.log("Employee list passed to component:", employeeList);
 
     const [localRows, setLocalRows] = useState([]);
     const [advanceGiven, setAdvanceGiven] = useState(false);
+    const [isLoadingAdvance, setIsLoadingAdvance] = useState(false);
 
     /* ================= FETCH ADVANCE FROM DB ================= */
     useEffect(() => {
         const fetchAdvance = async () => {
-            if (!employeeId || !startEnd.start || !startEnd.end) return;
+            console.log("🟢 fetchAdvance running for:", { employeeId, start: startEnd.start, end: startEnd.end });
+            
+            if (!employeeId || !startEnd.start || !startEnd.end) {
+                console.log("🟡 No employee/dates, setting advanceGiven to false");
+                setAdvanceGiven(false);
+                return;
+            }
+            
+            setIsLoadingAdvance(true);
             try {
-                const res = await fetch(`/api/advances/${employeeId}?start=${startEnd.start}&end=${startEnd.end}`);
-                const data = await res.json();
-                setAdvanceGiven(data.exists); // true if advance exists for this week
+                // Check if an advance exists for this employee in this date range
+                const url = `${API_BASE_URL}/api/advances/${employeeId}?start=${startEnd.start}&end=${startEnd.end}`;
+                console.log("🟢 Fetching from:", url);
+                const res = await fetch(url);
+                
+                if (res.ok) {
+                    const data = await res.json();
+                    console.log("🟢 Fetch result:", data);
+                    // Backend might return an array of advances, check if any exist in this date range
+                    const hasAdvance = data && (data.exists || (Array.isArray(data) && data.length > 0));
+                    setAdvanceGiven(hasAdvance);
+                } else {
+                    // If endpoint doesn't exist or returns error, default to false
+                    console.log("🟡 No advance found or endpoint missing");
+                    setAdvanceGiven(false);
+                }
             } catch (err) {
-                console.error("Error fetching advance:", err);
+                console.error("❌ Error fetching advance:", err);
+                setAdvanceGiven(false);
+            } finally {
+                setIsLoadingAdvance(false);
             }
         };
+        
         fetchAdvance();
-    }, [employeeId, startEnd]);
+    }, [employeeId, startEnd.start, startEnd.end]); // Re-run when employee OR date range changes
 
     /* ================= FILL MISSING DATES ================= */
     useEffect(() => {
@@ -86,30 +113,58 @@ export default function ReportingContent({
         setLocalRows(filledRows);
     }, [rows, startEnd]);
 
+    /* ================= HELPER: CONVERT TIME TO DECIMAL HOURS ================= */
+    const timeToDecimalHours = (timeStr) => {
+        // Handle null, undefined, or empty string
+        if (!timeStr || timeStr === "00:00" || timeStr === "") return 0;
+        
+        // If it's already a number, return it
+        if (typeof timeStr === 'number') return timeStr;
+        
+        // Convert to string and trim
+        const str = String(timeStr).trim();
+        
+        // If it's a decimal number as string (e.g., "8.5")
+        if (!str.includes(':')) {
+            const num = parseFloat(str);
+            return isNaN(num) ? 0 : num;
+        }
+        
+        // Handle HH:MM format
+        const parts = str.split(':');
+        if (parts.length !== 2) return 0;
+        
+        const hours = parseInt(parts[0], 10);
+        const minutes = parseInt(parts[1], 10);
+        
+        // Check for invalid parsing
+        if (isNaN(hours) || isNaN(minutes)) return 0;
+        
+        return hours + (minutes / 60);
+    };
+
     /* ================= CALCULATE SALARY FOR DAY ================= */
     const salaryForDay = (row) => {
         const empIdRow = Number(row.emp_id);
         const employee = employeeList.find((e) => Number(e.emp_id) === empIdRow);
         const baseSalary = Number(employee?.Base_salary || 0);
-        const workHours = timeToDecimalHours(row.work_hours || "00:00");
-console.log("row.work_hours", row.work_hours)
+        const workHours = timeToDecimalHours(row.work_hours);
         
-console.log("workHours", workHours)
-        if (!baseSalary || !workHours) return { salary: "0.00", baseSalary };
+        console.log("Salary calculation:", { 
+            work_hours: row.work_hours, 
+            workHours, 
+            baseSalary,
+            employee: employee?.name 
+        });
+        
+        if (!baseSalary || workHours === 0) return { salary: "0.00", baseSalary };
 
-        const hourlyRate = baseSalary / 8 / 26; // 8 hours/day, 26 days/month
+        const hourlyRate = baseSalary / 8 / 26;
         const salary = workHours * hourlyRate;
 
         return { salary: salary.toFixed(2), baseSalary };
     };
 
-// ✅ Helper function to convert "HH:MM" → decimal hours
-const timeToDecimalHours = (timeStr) => {
-    if (!timeStr || timeStr === "00:00") return 0;
-    
-    const [hours, minutes] = timeStr.split(':').map(Number);
-    return hours + (minutes / 60);
-};
     /* ================= WEEK SUMMARY ================= */
     const weekSummary = useMemo(() => {
         if (!localRows.length) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0 };
@@ -130,6 +185,15 @@ const timeToDecimalHours = (timeStr) => {
         const netSalary = brutSalary - totalConsommation;
         const advance = netSalary / 2;
 
+        console.log("Week Summary Calculation:", {
+            totalHours,
+            hourlyRate,
+            brutSalary,
+            netSalary,
+            advance,
+            baseSalary
+        });
+
         return {
             totalHours: totalHours.toFixed(2),
             brutSalary: brutSalary.toFixed(2),
@@ -143,7 +207,6 @@ const timeToDecimalHours = (timeStr) => {
     }, [localRows, employeeList]);
 
     /* ================= MONTH SUMMARY ================= */
-    /* ================= MONTH SUMMARY ================= */
     const monthSummary = useMemo(() => {
         if (!localRows.length) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0 };
 
@@ -154,15 +217,25 @@ const timeToDecimalHours = (timeStr) => {
 
         const hourlyRate = baseSalary / 8 / 26;
 
-        const totalHours = localRows.reduce((sum, r) => sum +timeToDecimalHours(r.work_hours || "00:00"), 0);
+        const totalHours = localRows.reduce((sum, r) => sum + timeToDecimalHours(r.work_hours || "00:00"), 0);
         const totalPenalties = localRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
-        const totalAdvancesGiven = advanceGiven ? weekSummary.advance : 0; // ✅ include weekly advance checkbox
+        const totalAdvancesGiven = advanceGiven ? parseFloat(weekSummary.advance) : 0;
         const totalConsommation = localRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
         const totalLate = localRows.reduce((sum, r) => sum + (parseFloat(r.late_minutes) || 0), 0);
 
         const brutSalary = totalHours * hourlyRate;
         const netSalary = brutSalary - totalPenalties - totalAdvancesGiven - totalConsommation;
         const advance = netSalary / 2;
+
+        console.log("Month Summary Calculation:", {
+            totalHours,
+            hourlyRate,
+            brutSalary,
+            netSalary,
+            advance,
+            baseSalary,
+            totalAdvancesGiven
+        });
 
         return {
             totalHours: totalHours.toFixed(2),
@@ -175,7 +248,6 @@ const timeToDecimalHours = (timeStr) => {
             totalPenalties,
         };
     }, [localRows, employeeList, advanceGiven, weekSummary.advance]);
-
 
     const isDayView = startEnd.start === startEnd.end;
 
@@ -214,26 +286,83 @@ const timeToDecimalHours = (timeStr) => {
 
     /* ================= HANDLE ADVANCE CHANGE ================= */
     const handleAdvanceChange = async (checked) => {
-        if (!employeeId || !startEnd.start || !startEnd.end) return;
+        console.log("🔵 handleAdvanceChange called with:", checked);
+        console.log("🔵 employeeId:", employeeId);
+        console.log("🔵 startEnd:", startEnd);
+        
+        if (!employeeId || !startEnd.start || !startEnd.end) {
+            console.log("❌ Missing required data, returning early");
+            return;
+        }
+        
+        console.log("✅ Updating state to:", checked);
+        // Optimistically update the UI immediately
+        setAdvanceGiven(checked);
+        
         try {
             const method = checked ? "POST" : "DELETE";
-            const url = `/api/advances`;
-            await fetch(url, {
-                method,
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
+            const url = checked 
+                ? `${API_BASE_URL}/api/advances`
+                : `${API_BASE_URL}/api/advances/${employeeId}`;
+            
+            if (checked) {
+                // POST - create advance
+                const requestBody = {
                     emp_id: employeeId,
-                    start: startEnd.start,
-                    end: startEnd.end,
-                    amount: checked ? weekSummary.advance : 0,
-                    reason: "Weekly advance",
-                }),
-            });
+                    amount: parseFloat(weekSummary.advance),
+                    date: startEnd.start, // Backend expects 'date', not 'start'
+                    reason: `Weekly advance (${startEnd.start} to ${startEnd.end})`,
+                };
+                console.log("🔵 Making API call:", method, url);
+                console.log("🔵 Request body:", requestBody);
+                
+                const response = await fetch(url, {
+                    method,
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(requestBody),
+                });
+                
+                console.log("🔵 API response status:", response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+                    console.log("❌ API error response:", errorData);
+                    throw new Error(`Failed to update advance: ${JSON.stringify(errorData)}`);
+                }
+                
+                console.log("✅ API call successful");
+            } else {
+                // DELETE - remove advance
+                console.log("🔵 Making API call:", method, url);
+                
+                const response = await fetch(url, {
+                    method,
+                });
+                
+                console.log("🔵 API response status:", response.status);
+                
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
+                    console.log("❌ API error response:", errorData);
+                    throw new Error(`Failed to update advance: ${JSON.stringify(errorData)}`);
+                }
+                
+                console.log("✅ API call successful");
+            }
+            
             if (onSavedComment) {
-                onSavedComment({ start: startEnd.start, end: startEnd.end, advanceGiven: checked });
+                onSavedComment({ 
+                    start: startEnd.start, 
+                    end: startEnd.end, 
+                    advanceGiven: checked,
+                    employeeId // Pass employee ID in callback
+                });
             }
         } catch (err) {
-            console.error("Error updating advance:", err);
+            console.error("❌ Error updating advance:", err);
+            // Revert on error
+            setAdvanceGiven(!checked);
+            alert("Failed to update advance. Please try again.");
         }
     };
 
@@ -305,7 +434,6 @@ const timeToDecimalHours = (timeStr) => {
                         <div style={cardsContainerStyle}>
                             {new Date(startEnd.end) - new Date(startEnd.start) < 7 * 24 * 60 * 60 * 1000 ? (
                                 <>
-
                                     <Card label="Brut Salary" value={`${weekSummary.brutSalary} DA`} sub={`${weekSummary.hourlyRate} DA / hour`} />
                                     <Card label="Net Salary" value={`${weekSummary.netSalary} DA`} />
                                     <Card label="Advance" value={`${weekSummary.advance} DA`}>
@@ -313,13 +441,12 @@ const timeToDecimalHours = (timeStr) => {
                                             <input
                                                 type="checkbox"
                                                 checked={advanceGiven}
-                                                onChange={async (e) => {
-                                                    const checked = e.target.checked;
-                                                    setAdvanceGiven(checked);
-                                                    await handleAdvanceChange(checked);
+                                                disabled={isLoadingAdvance}
+                                                onChange={(e) => {
+                                                    handleAdvanceChange(e.target.checked);
                                                 }}
                                             />
-                                            Advance Given
+                                            Advance Given {isLoadingAdvance && "(loading...)"}
                                         </label>
                                     </Card>
                                     <Card label="Total Hours" value={`${weekSummary.totalHours} h`} />
@@ -382,7 +509,7 @@ const timeToDecimalHours = (timeStr) => {
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={6} style={{ textAlign: "center" }}>No data available</td>
+                                            <td colSpan={6} style={{ textAlign: "center", padding: 20 }}>No data available</td>
                                         </tr>
                                     )}
                                 </tbody>

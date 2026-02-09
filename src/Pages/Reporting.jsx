@@ -302,10 +302,11 @@ export default function Reporting() {
           {error && <div style={{ color: "#dc2626", marginBottom: 8 }}>{error}</div>}
           {loading && <div style={{ color: "#6b7280" }}>Loading...</div>}
           <ReportingContent
-            rows={displayedRows}          // ✅ pass only selected employee rows
+            rows={displayedRows}
             summary={summary}
             startEnd={computeRange()}
-            employeeList={employees}      // pass all employees for base_salary
+            employeeId={selectedEmployeeId}  // ✅ FIXED: Added employeeId prop
+            employeeList={employees}
           />
         </main>
       </div>
