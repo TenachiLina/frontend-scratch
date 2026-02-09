@@ -10,12 +10,39 @@ import { API_BASE_URL } from "../services/config";
 let employeesCache = null;
 
 export default function Reporting() {
-  const todayISO = new Date().toISOString().split("T")[0];
+  // ✅ Function to get last Thursday and calculate week range
+  const getLastWeekRange = () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday, 4 = Thursday
+    
+    // Calculate days to go back to last Thursday
+    let daysToLastThursday;
+    if (dayOfWeek >= 4) {
+      // If today is Thursday or later, go back to this week's Thursday
+      daysToLastThursday = dayOfWeek - 4;
+    } else {
+      // If before Thursday, go back to last week's Thursday
+      daysToLastThursday = dayOfWeek + 3;
+    }
+    
+    const lastThursday = new Date(today);
+    lastThursday.setDate(today.getDate() - daysToLastThursday);
+    
+    const endOfWeek = new Date(lastThursday);
+    endOfWeek.setDate(lastThursday.getDate() + 6); // Thursday + 6 days = Wednesday
+    
+    return {
+      start: lastThursday.toISOString().split("T")[0],
+      end: endOfWeek.toISOString().split("T")[0]
+    };
+  };
+
+  const lastWeek = getLastWeekRange();
 
   const [employees, setEmployees] = useState([]);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState(null); // ✅ Changed to null for "all employees"
   const [filterMode, setFilterMode] = useState("week");
-  const [selectedDate, setSelectedDate] = useState(todayISO);
+  const [selectedDate, setSelectedDate] = useState(lastWeek.start); // ✅ Set to last Thursday
   const [customStart, setCustomStart] = useState("");
   const [customEnd, setCustomEnd] = useState("");
   const [rows, setRows] = useState([]);
@@ -31,20 +58,23 @@ export default function Reporting() {
       try {
         if (employeesCache) {
           setEmployees(employeesCache);
-          if (employeesCache.length)
-            setSelectedEmployeeId(employeesCache[0].emp_id || employeesCache[0].id);
           return;
         }
         const list = await employeesApi.getEmployees();
         employeesCache = list.map(emp => ({ ...emp, _visible: true }));
         setEmployees(employeesCache);
-        if (list.length) setSelectedEmployeeId(list[0].emp_id || list[0].id);
       } catch (err) {
         console.error(err);
       }
     }
     fetchData();
   }, []);
+
+  /* ==================== AUTO-FETCH ON MOUNT ==================== */
+  useEffect(() => {
+    // Automatically fetch report when component mounts
+    fetchReportRange();
+  }, []); // Empty dependency array = run once on mount
 
   /* ==================== DATE RANGE ==================== */
   const computeRange = () => {
@@ -98,7 +128,7 @@ export default function Reporting() {
   /* ==================== TABLE DATA FILTER ==================== */
   const displayedRows = selectedEmployeeId
     ? rows.filter(r => r.emp_id === selectedEmployeeId)
-    : rows;
+    : rows; // ✅ Show all rows when no employee selected
 
   /* ==================== STYLES ==================== */
   const toggleButtonStyle = {
@@ -257,6 +287,23 @@ export default function Reporting() {
 
           {showEmployees && (
             <div style={{ marginTop: 50 }}>
+              {/* ✅ "All Employees" option */}
+              <div
+                onClick={() => setSelectedEmployeeId(null)}
+                style={{
+                  padding: 10,
+                  borderRadius: 10,
+                  marginBottom: 12,
+                  cursor: "pointer",
+                  background: selectedEmployeeId === null ? "#fed7aa" : "#fff7ed",
+                  border: selectedEmployeeId === null ? "2px solid #f97316" : "1px solid #d1d5db",
+                  fontWeight: selectedEmployeeId === null ? "bold" : "normal",
+                }}
+              >
+                <strong>All Employees</strong>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>Global Statistics</div>
+              </div>
+
               <input
                 placeholder="Search employee..."
                 style={{
@@ -298,15 +345,16 @@ export default function Reporting() {
         </aside>
 
         {/* MAIN REPORT */}
-        <main style={{ flex: 1, padding: 20 }}>
+        <main style={{ flex: 1, padding: 20, overflowY: "auto" }}>
           {error && <div style={{ color: "#dc2626", marginBottom: 8 }}>{error}</div>}
           {loading && <div style={{ color: "#6b7280" }}>Loading...</div>}
           <ReportingContent
             rows={displayedRows}
             summary={summary}
             startEnd={computeRange()}
-            employeeId={selectedEmployeeId}  // ✅ FIXED: Added employeeId prop
+            employeeId={selectedEmployeeId}
             employeeList={employees}
+            isGlobalView={selectedEmployeeId === null} // ✅ Pass flag for global view
           />
         </main>
       </div>

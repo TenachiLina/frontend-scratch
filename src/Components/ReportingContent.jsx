@@ -8,8 +8,10 @@ export default function ReportingContent({
     employeeId = null,
     employeeList = [],
     onSavedComment,
+    isGlobalView = false,
 }) {
     console.log("Employee list passed to component:", employeeList);
+    console.log("Is Global View:", isGlobalView);
 
     const [localRows, setLocalRows] = useState([]);
     const [advanceGiven, setAdvanceGiven] = useState(false);
@@ -19,28 +21,25 @@ export default function ReportingContent({
     useEffect(() => {
         const fetchAdvance = async () => {
             console.log("🟢 fetchAdvance running for:", { employeeId, start: startEnd.start, end: startEnd.end });
-            
+
             if (!employeeId || !startEnd.start || !startEnd.end) {
                 console.log("🟡 No employee/dates, setting advanceGiven to false");
                 setAdvanceGiven(false);
                 return;
             }
-            
+
             setIsLoadingAdvance(true);
             try {
-                // Check if an advance exists for this employee in this date range
                 const url = `${API_BASE_URL}/api/advances/${employeeId}?start=${startEnd.start}&end=${startEnd.end}`;
                 console.log("🟢 Fetching from:", url);
                 const res = await fetch(url);
-                
+
                 if (res.ok) {
                     const data = await res.json();
                     console.log("🟢 Fetch result:", data);
-                    // Backend might return an array of advances, check if any exist in this date range
                     const hasAdvance = data && (data.exists || (Array.isArray(data) && data.length > 0));
                     setAdvanceGiven(hasAdvance);
                 } else {
-                    // If endpoint doesn't exist or returns error, default to false
                     console.log("🟡 No advance found or endpoint missing");
                     setAdvanceGiven(false);
                 }
@@ -51,14 +50,32 @@ export default function ReportingContent({
                 setIsLoadingAdvance(false);
             }
         };
-        
+
         fetchAdvance();
-    }, [employeeId, startEnd.start, startEnd.end]); // Re-run when employee OR date range changes
+    }, [employeeId, startEnd.start, startEnd.end]);
 
     /* ================= FILL MISSING DATES ================= */
     useEffect(() => {
         if (!rows || !startEnd?.start || !startEnd?.end) {
             setLocalRows([]);
+            return;
+        }
+
+        if (isGlobalView) {
+            setLocalRows(rows.map(r => ({
+                ...r,
+                work_date: r.work_date ? r.work_date.toString().split("T")[0] : "",
+                work_hours: r.work_hours || null,
+                late_minutes: r.late_minutes || 0,
+                overtime_minutes: r.overtime_minutes || 0,
+                penalty: r.penalty || 0,
+                consommation: r.consommation || 0,
+                salary: Number(r.salary || 0),
+                advance_taken: r.advance_taken || false,
+                absent: r.absent || 0,
+                absent_comment: r.absent_comment || "",
+                is_empty: false,
+            })));
             return;
         }
 
@@ -95,6 +112,8 @@ export default function ReportingContent({
                     consommation: existing.consommation || 0,
                     salary: Number(existing.salary || 0),
                     advance_taken: existing.advance_taken || false,
+                    absent: existing.absent || 0,
+                    absent_comment: existing.absent_comment || "",
                     is_empty: false,
                 }
                 : {
@@ -106,40 +125,35 @@ export default function ReportingContent({
                     consommation: 0,
                     salary: 0,
                     advance_taken: false,
+                    absent: 0,
+                    absent_comment: "",
                     is_empty: true,
                 };
         });
 
         setLocalRows(filledRows);
-    }, [rows, startEnd]);
+    }, [rows, startEnd, isGlobalView]);
 
     /* ================= HELPER: CONVERT TIME TO DECIMAL HOURS ================= */
     const timeToDecimalHours = (timeStr) => {
-        // Handle null, undefined, or empty string
         if (!timeStr || timeStr === "00:00" || timeStr === "") return 0;
-        
-        // If it's already a number, return it
         if (typeof timeStr === 'number') return timeStr;
-        
-        // Convert to string and trim
+
         const str = String(timeStr).trim();
-        
-        // If it's a decimal number as string (e.g., "8.5")
+
         if (!str.includes(':')) {
             const num = parseFloat(str);
             return isNaN(num) ? 0 : num;
         }
-        
-        // Handle HH:MM format
+
         const parts = str.split(':');
         if (parts.length !== 2) return 0;
-        
+
         const hours = parseInt(parts[0], 10);
         const minutes = parseInt(parts[1], 10);
-        
-        // Check for invalid parsing
+
         if (isNaN(hours) || isNaN(minutes)) return 0;
-        
+
         return hours + (minutes / 60);
     };
 
@@ -149,14 +163,7 @@ export default function ReportingContent({
         const employee = employeeList.find((e) => Number(e.emp_id) === empIdRow);
         const baseSalary = Number(employee?.Base_salary || 0);
         const workHours = timeToDecimalHours(row.work_hours);
-        
-        console.log("Salary calculation:", { 
-            work_hours: row.work_hours, 
-            workHours, 
-            baseSalary,
-            employee: employee?.name 
-        });
-        
+
         if (!baseSalary || workHours === 0) return { salary: "0.00", baseSalary };
 
         const hourlyRate = baseSalary / 8 / 26;
@@ -165,9 +172,72 @@ export default function ReportingContent({
         return { salary: salary.toFixed(2), baseSalary };
     };
 
+    /* ================= GLOBAL SUMMARY (ALL EMPLOYEES) ================= */
+    const globalSummary = useMemo(() => {
+        if (!isGlobalView || !localRows.length) return null;
+
+        const employeeGroups = {};
+        localRows.forEach(row => {
+            const empId = row.emp_id;
+            if (!employeeGroups[empId]) {
+                employeeGroups[empId] = [];
+            }
+            employeeGroups[empId].push(row);
+        });
+
+        let totalHours = 0;
+        let totalBrutSalary = 0;
+        let totalConsommation = 0;
+        let totalLate = 0;
+        let totalPenalties = 0;
+        let totalBaseSalary = 0;
+        let totalAdvances = 0;
+        let totalAbsences = 0;
+
+        Object.keys(employeeGroups).forEach(empId => {
+            const empRows = employeeGroups[empId];
+            const employee = employeeList.find(e => Number(e.emp_id) === Number(empId));
+            const baseSalary = Number(employee?.Base_salary || 0);
+            const hourlyRate = baseSalary / 8 / 26;
+
+            const empHours = empRows.reduce((sum, r) => sum + timeToDecimalHours(r.work_hours || "00:00"), 0);
+            const empConsommation = empRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
+            const empLate = empRows.reduce((sum, r) => sum + (parseFloat(r.late_minutes) || 0), 0);
+            const empPenalties = empRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
+            const empAbsences = empRows.reduce((sum, r) => sum + (r.absent ? 1 : 0), 0);
+            const empBrutSalary = empHours * hourlyRate;
+            const empNetSalary = empBrutSalary - empConsommation - empPenalties;
+            const empAdvance = empNetSalary / 2;
+
+            totalHours += empHours;
+            totalBrutSalary += empBrutSalary;
+            totalConsommation += empConsommation;
+            totalLate += empLate;
+            totalPenalties += empPenalties;
+            totalBaseSalary += baseSalary;
+            totalAdvances += empAdvance;
+            totalAbsences += empAbsences;
+        });
+
+        const netSalary = totalBrutSalary - totalConsommation - totalPenalties;
+
+        return {
+            totalHours: totalHours.toFixed(2),
+            brutSalary: totalBrutSalary.toFixed(2),
+            netSalary: netSalary.toFixed(2),
+            totalLate: totalLate.toFixed(0),
+            totalConsommation: totalConsommation.toFixed(2),
+            totalPenalties: totalPenalties.toFixed(2),
+            totalBaseSalary: totalBaseSalary.toFixed(2),
+            totalAdvances: totalAdvances.toFixed(2),
+            totalAbsences: totalAbsences,
+            employeeCount: Object.keys(employeeGroups).length,
+        };
+    }, [localRows, employeeList, isGlobalView]);
+
     /* ================= WEEK SUMMARY ================= */
     const weekSummary = useMemo(() => {
-        if (!localRows.length) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0 };
+        if (!localRows.length || isGlobalView) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0, totalAbsences: 0 };
 
         const firstRowWithEmp = localRows.find(r => r.emp_id);
         const empId = firstRowWithEmp ? Number(firstRowWithEmp.emp_id) : null;
@@ -180,19 +250,11 @@ export default function ReportingContent({
         const totalConsommation = localRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
         const totalLate = localRows.reduce((sum, r) => sum + (parseFloat(r.late_minutes) || 0), 0);
         const totalPenalties = localRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
+        const totalAbsences = localRows.reduce((sum, r) => sum + (r.absent ? 1 : 0), 0);
 
         const brutSalary = totalHours * hourlyRate;
         const netSalary = brutSalary - totalConsommation;
         const advance = netSalary / 2;
-
-        console.log("Week Summary Calculation:", {
-            totalHours,
-            hourlyRate,
-            brutSalary,
-            netSalary,
-            advance,
-            baseSalary
-        });
 
         return {
             totalHours: totalHours.toFixed(2),
@@ -203,12 +265,13 @@ export default function ReportingContent({
             totalLate,
             totalConsommation,
             totalPenalties,
+            totalAbsences,
         };
-    }, [localRows, employeeList]);
+    }, [localRows, employeeList, isGlobalView]);
 
     /* ================= MONTH SUMMARY ================= */
     const monthSummary = useMemo(() => {
-        if (!localRows.length) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0 };
+        if (!localRows.length || isGlobalView) return { totalHours: 0, brutSalary: 0, netSalary: 0, advance: 0, hourlyRate: 0, totalLate: 0, totalConsommation: 0, totalPenalties: 0, totalAbsences: 0 };
 
         const firstRowWithEmp = localRows.find(r => r.emp_id);
         const empId = firstRowWithEmp ? Number(firstRowWithEmp.emp_id) : null;
@@ -222,20 +285,11 @@ export default function ReportingContent({
         const totalAdvancesGiven = advanceGiven ? parseFloat(weekSummary.advance) : 0;
         const totalConsommation = localRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
         const totalLate = localRows.reduce((sum, r) => sum + (parseFloat(r.late_minutes) || 0), 0);
+        const totalAbsences = localRows.reduce((sum, r) => sum + (r.absent ? 1 : 0), 0);
 
         const brutSalary = totalHours * hourlyRate;
         const netSalary = brutSalary - totalPenalties - totalAdvancesGiven - totalConsommation;
         const advance = netSalary / 2;
-
-        console.log("Month Summary Calculation:", {
-            totalHours,
-            hourlyRate,
-            brutSalary,
-            netSalary,
-            advance,
-            baseSalary,
-            totalAdvancesGiven
-        });
 
         return {
             totalHours: totalHours.toFixed(2),
@@ -246,8 +300,9 @@ export default function ReportingContent({
             totalLate,
             totalConsommation,
             totalPenalties,
+            totalAbsences,
         };
-    }, [localRows, employeeList, advanceGiven, weekSummary.advance]);
+    }, [localRows, employeeList, advanceGiven, weekSummary.advance, isGlobalView]);
 
     const isDayView = startEnd.start === startEnd.end;
 
@@ -265,108 +320,142 @@ export default function ReportingContent({
         fontSize: 13,
     };
 
-    const Card = ({ label, value, sub, children }) => (
+    const Card = ({ label, value, sub, children, highlight = false }) => (
         <div
             style={{
-                background: "linear-gradient(135deg, #fed7aa, #fff3e0)",
+                background: highlight
+                    ? "linear-gradient(135deg, #fb923c, #f97316)"
+                    : "linear-gradient(135deg, #fed7aa, #fff3e0)",
                 borderRadius: 12,
                 padding: 20,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                boxShadow: highlight
+                    ? "0 6px 20px rgba(251, 146, 60, 0.4)"
+                    : "0 4px 12px rgba(0,0,0,0.1)",
                 textAlign: "center",
                 transition: "transform 0.2s, box-shadow 0.2s",
                 cursor: "default",
+                border: highlight ? "2px solid #ea580c" : "none",
             }}
         >
-            <div style={cardLabel}>{label}</div>
-            <div style={cardValue}>{value}</div>
-            {sub && <div style={{ fontSize: 12, color: "#9ca3af" }}>{sub}</div>}
+            <div style={{
+                ...cardLabel,
+                color: highlight ? "#fff" : "#6b7280",
+                fontWeight: highlight ? 600 : 400,
+            }}>{label}</div>
+            <div style={{
+                ...cardValue,
+                color: highlight ? "#fff" : "#111827",
+                fontSize: highlight ? 26 : 22,
+            }}>{value}</div>
+            {sub && <div style={{ fontSize: 12, color: highlight ? "#fed7aa" : "#9ca3af" }}>{sub}</div>}
             {children}
+        </div>
+    );
+
+    const StatCard = ({ icon, label, value, color = "#f97316" }) => (
+        <div
+            style={{
+                background: "#fff",
+                borderRadius: 16,
+                padding: 24,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
+                border: `2px solid ${color}`,
+                textAlign: "center",
+                transition: "transform 0.3s, box-shadow 0.3s",
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.transform = "translateY(-4px)";
+                e.currentTarget.style.boxShadow = "0 12px 32px rgba(0,0,0,0.18)";
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.transform = "translateY(0)";
+                e.currentTarget.style.boxShadow = "0 8px 24px rgba(0,0,0,0.12)";
+            }}
+        >
+            <div style={{ fontSize: 36, marginBottom: 12 }}>{icon}</div>
+            <div style={{ fontSize: 14, color: "#6b7280", marginBottom: 8, fontWeight: 500 }}>{label}</div>
+            <div style={{ fontSize: 28, fontWeight: 700, color: color }}>{value}</div>
         </div>
     );
 
     /* ================= HANDLE ADVANCE CHANGE ================= */
     const handleAdvanceChange = async (checked) => {
         console.log("🔵 handleAdvanceChange called with:", checked);
-        console.log("🔵 employeeId:", employeeId);
-        console.log("🔵 startEnd:", startEnd);
-        
+
         if (!employeeId || !startEnd.start || !startEnd.end) {
             console.log("❌ Missing required data, returning early");
             return;
         }
-        
-        console.log("✅ Updating state to:", checked);
-        // Optimistically update the UI immediately
+
         setAdvanceGiven(checked);
-        
+
         try {
             const method = checked ? "POST" : "DELETE";
-            const url = checked 
+            const url = checked
                 ? `${API_BASE_URL}/api/advances`
                 : `${API_BASE_URL}/api/advances/${employeeId}`;
-            
+
             if (checked) {
-                // POST - create advance
                 const requestBody = {
                     emp_id: employeeId,
                     amount: parseFloat(weekSummary.advance),
-                    date: startEnd.start, // Backend expects 'date', not 'start'
+                    date: startEnd.start,
                     reason: `Weekly advance (${startEnd.start} to ${startEnd.end})`,
                 };
-                console.log("🔵 Making API call:", method, url);
-                console.log("🔵 Request body:", requestBody);
-                
+
                 const response = await fetch(url, {
                     method,
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(requestBody),
                 });
-                
-                console.log("🔵 API response status:", response.status);
-                
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-                    console.log("❌ API error response:", errorData);
                     throw new Error(`Failed to update advance: ${JSON.stringify(errorData)}`);
                 }
-                
-                console.log("✅ API call successful");
             } else {
-                // DELETE - remove advance
-                console.log("🔵 Making API call:", method, url);
-                
-                const response = await fetch(url, {
-                    method,
-                });
-                
-                console.log("🔵 API response status:", response.status);
-                
+                const response = await fetch(url, { method });
+
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({ error: "Unknown error" }));
-                    console.log("❌ API error response:", errorData);
                     throw new Error(`Failed to update advance: ${JSON.stringify(errorData)}`);
                 }
-                
-                console.log("✅ API call successful");
             }
-            
+
             if (onSavedComment) {
-                onSavedComment({ 
-                    start: startEnd.start, 
-                    end: startEnd.end, 
+                onSavedComment({
+                    start: startEnd.start,
+                    end: startEnd.end,
                     advanceGiven: checked,
-                    employeeId // Pass employee ID in callback
+                    employeeId
                 });
             }
         } catch (err) {
             console.error("❌ Error updating advance:", err);
-            // Revert on error
             setAdvanceGiven(!checked);
             alert("Failed to update advance. Please try again.");
         }
     };
 
-    const isReportReady = startEnd.start && startEnd.end && employeeId;
+    /* ================= GROUP ROWS BY EMPLOYEE (FOR GLOBAL VIEW) ================= */
+    const groupedByEmployee = useMemo(() => {
+        if (!isGlobalView) return {};
+
+        const groups = {};
+        localRows.forEach(row => {
+            const empId = row.emp_id;
+            if (!groups[empId]) {
+                const employee = employeeList.find(e => Number(e.emp_id) === Number(empId));
+                groups[empId] = {
+                    employee,
+                    rows: []
+                };
+            }
+            groups[empId].rows.push(row);
+        });
+
+        return groups;
+    }, [localRows, employeeList, isGlobalView]);
 
     return (
         <div
@@ -390,14 +479,314 @@ export default function ReportingContent({
                 }}
             >
                 {/* Header */}
-                <div style={{ marginBottom: 16 }}>
-                    <div style={{ fontSize: 16, color: "#4b5563" }}>Detailed Report</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
-                        {startEnd.start} → {startEnd.end}
-                    </div>
+                <div style={{ marginBottom: 24 }}>
+                    {isGlobalView && (
+                        <div style={{
+                            background: "linear-gradient(135deg, #f97316, #ea580c)",
+                            padding: "16px 24px",
+                            borderRadius: 12,
+                            marginBottom: 16,
+                            boxShadow: "0 8px 24px rgba(249, 115, 22, 0.3)",
+                        }}>
+                            <div style={{ fontSize: 24, fontWeight: 700, color: "#fff", display: "flex", alignItems: "center", gap: 12 }}>
+                                <span style={{ fontSize: 32 }}>📊</span>
+                                Global Statistics - All Employees
+                            </div>
+                            <div style={{ fontSize: 14, color: "#fed7aa", marginTop: 4 }}>
+                                Comprehensive overview of company performance
+                            </div>
+                        </div>
+                    )}
+                    {!isGlobalView && (
+                        <>
+                            <div style={{ fontSize: 16, color: "#4b5563" }}>Detailed Report</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, marginTop: 4 }}>
+                                {startEnd.start} → {startEnd.end}
+                            </div>
+                        </>
+                    )}
                 </div>
 
-                {isDayView ? (
+                {/* ================= GLOBAL VIEW ================= */}
+                {isGlobalView ? (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                        {/* Financial Overview */}
+                        <div style={{
+                            background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+                            borderRadius: 16,
+                            padding: 24,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                        }}>
+                            <h3 style={{
+                                fontSize: 20,
+                                fontWeight: 700,
+                                marginBottom: 20,
+                                color: "#ea580c",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                            }}>
+                                <span>💼</span> Financial Overview
+                            </h3>
+                            <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                                gap: 20,
+                            }}>
+                                <StatCard
+                                    icon="✅"
+                                    label="Total Net Salary"
+                                    value={`${globalSummary?.netSalary || 0} DA`}
+                                    color="#059669"
+                                />
+                                <StatCard
+                                    icon="⚡"
+                                    label="Total Advances"
+                                    value={`${globalSummary?.totalAdvances || 0} DA`}
+                                    color="#dc2626"
+                                />
+                                <StatCard
+                                    icon="🍽️"
+                                    label="Total Consommation"
+                                    value={`${globalSummary?.totalConsommation || 0} DA`}
+                                    color="#ea580c"
+                                />
+                                <StatCard
+                                    icon="⚠️"
+                                    label="Total Penalties"
+                                    value={`${globalSummary?.totalPenalties || 0} DA`}
+                                    color="#dc2626"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Key Metrics - Highlighted */}
+                        <div style={{
+                            background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+                            borderRadius: 16,
+                            padding: 24,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                        }}>
+                            <h3 style={{
+                                fontSize: 20,
+                                fontWeight: 700,
+                                marginBottom: 20,
+                                color: "#ea580c",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                            }}>
+                                <span>🎯</span> Key Metrics
+                            </h3>
+                            <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                                gap: 20,
+                            }}>
+                                <StatCard
+                                    icon="👥"
+                                    label="Total Employees"
+                                    value={globalSummary?.employeeCount || 0}
+                                    color="#3b82f6"
+                                />
+                                <StatCard
+                                    icon="⏰"
+                                    label="Total Hours Worked"
+                                    value={`${globalSummary?.totalHours || 0} h`}
+                                    color="#8b5cf6"
+                                />
+                                <StatCard
+                                    icon="💰"
+                                    label="Total Base Salary"
+                                    value={`${globalSummary?.totalBaseSalary || 0} DA`}
+                                    color="#10b981"
+                                />
+                                <StatCard
+                                    icon="💵"
+                                    label="Total Brut Salary"
+                                    value={`${globalSummary?.brutSalary || 0} DA`}
+                                    color="#f59e0b"
+                                />
+                            </div>
+                        </div>
+
+
+                        {/* Performance Indicators */}
+                        <div style={{
+                            background: "linear-gradient(135deg, #fff7ed, #ffedd5)",
+                            borderRadius: 16,
+                            padding: 24,
+                            boxShadow: "0 4px 16px rgba(0,0,0,0.08)",
+                        }}>
+                            <h3 style={{
+                                fontSize: 20,
+                                fontWeight: 700,
+                                marginBottom: 20,
+                                color: "#ea580c",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                            }}>
+                                <span>📈</span> Performance Indicators
+                            </h3>
+                            <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                                gap: 20,
+                            }}>
+                                <StatCard
+                                    icon="⏱️"
+                                    label="Total Late Minutes"
+                                    value={`${globalSummary?.totalLate || 0} min`}
+                                    color="#f59e0b"
+                                />
+                                <StatCard
+                                    icon="🏖️"
+                                    label="Total Absences"
+                                    value={`${globalSummary?.totalAbsences || 0}`}
+                                    color="#dc2626"
+                                />
+                                <StatCard
+                                    icon="📊"
+                                    label="Avg Hours per Employee"
+                                    value={`${globalSummary?.employeeCount > 0 ? (parseFloat(globalSummary?.totalHours || 0) / globalSummary?.employeeCount).toFixed(2) : 0} h`}
+                                    color="#6366f1"
+                                />
+                                <StatCard
+                                    icon="💎"
+                                    label="Avg Salary per Employee"
+                                    value={`${globalSummary?.employeeCount > 0 ? (parseFloat(globalSummary?.brutSalary || 0) / globalSummary?.employeeCount).toFixed(2) : 0} DA`}
+                                    color="#8b5cf6"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Employees Breakdown */}
+                        <div style={{ marginTop: 8 }}>
+                            <h3 style={{
+                                fontSize: 20,
+                                fontWeight: 700,
+                                marginBottom: 16,
+                                color: "#374151",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 8,
+                            }}>
+                                <span>👤</span> Individual Employee Details
+                            </h3>
+                            <div style={{
+                                display: "grid",
+                                gridTemplateColumns: "repeat(auto-fill, minmax(400px, 1fr))",
+                                gap: 16,
+                            }}>
+                                {Object.keys(groupedByEmployee).map(empId => {
+                                    const { employee, rows: empRows } = groupedByEmployee[empId];
+                                    const baseSalary = Number(employee?.Base_salary || 0);
+                                    const hourlyRate = baseSalary / 8 / 26;
+
+                                    const empHours = empRows.reduce((sum, r) => sum + timeToDecimalHours(r.work_hours || "00:00"), 0);
+                                    const empConsommation = empRows.reduce((sum, r) => sum + (parseFloat(r.consommation) || 0), 0);
+                                    const empPenalties = empRows.reduce((sum, r) => sum + (parseFloat(r.penalty) || 0), 0);
+                                    const empAbsences = empRows.reduce((sum, r) => sum + (r.absent ? 1 : 0), 0);
+                                    const empBrutSalary = empHours * hourlyRate;
+                                    const empNetSalary = empBrutSalary - empConsommation - empPenalties;
+                                    const empAdvance = empNetSalary / 2;
+
+                                    return (
+                                        <div
+                                            key={empId}
+                                            style={{
+                                                border: "2px solid #fb923c",
+                                                padding: 20,
+                                                borderRadius: 12,
+                                                background: "linear-gradient(135deg, #fff, #fff7ed)",
+                                                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+                                                transition: "transform 0.2s, box-shadow 0.2s",
+                                            }}
+                                            onMouseEnter={(e) => {
+                                                e.currentTarget.style.transform = "translateY(-2px)";
+                                                e.currentTarget.style.boxShadow = "0 8px 20px rgba(0,0,0,0.12)";
+                                            }}
+                                            onMouseLeave={(e) => {
+                                                e.currentTarget.style.transform = "translateY(0)";
+                                                e.currentTarget.style.boxShadow = "0 4px 12px rgba(0,0,0,0.08)";
+                                            }}
+                                        >
+                                            <div style={{
+                                                fontSize: 18,
+                                                fontWeight: 700,
+                                                marginBottom: 12,
+                                                color: "#ea580c",
+                                                display: "flex",
+                                                alignItems: "center",
+                                                gap: 8,
+                                            }}>
+                                                <span>👤</span>
+                                                {employee?.name || `Employee #${empId}`}
+                                            </div>
+                                            <div style={{
+                                                display: "grid",
+                                                gridTemplateColumns: "1fr 1fr",
+                                                gap: 10,
+                                                fontSize: 13,
+                                                color: "#4b5563",
+                                            }}>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Base Salary:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#10b981", marginTop: 4 }}>
+                                                        {baseSalary.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Hours:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#8b5cf6", marginTop: 4 }}>
+                                                        {empHours.toFixed(2)} h
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Brut Salary:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#f59e0b", marginTop: 4 }}>
+                                                        {empBrutSalary.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Net Salary:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#059669", marginTop: 4 }}>
+                                                        {empNetSalary.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Advance:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#dc2626", marginTop: 4 }}>
+                                                        {empAdvance.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Consommation:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#ea580c", marginTop: 4 }}>
+                                                        {empConsommation.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Penalties:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#dc2626", marginTop: 4 }}>
+                                                        {empPenalties.toFixed(2)} DA
+                                                    </div>
+                                                </div>
+                                                <div style={{ padding: "8px 12px", background: "#fff", borderRadius: 8, border: "1px solid #fed7aa" }}>
+                                                    <strong style={{ color: "#6b7280" }}>Absences:</strong>
+                                                    <div style={{ fontSize: 16, fontWeight: 600, color: "#dc2626", marginTop: 4 }}>
+                                                        {empAbsences} {empAbsences === 1 ? 'day' : 'days'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                ) : isDayView ? (
                     /* ================= DAY VIEW ================= */
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                         {localRows.map((r, idx) => {
@@ -419,6 +808,8 @@ export default function ReportingContent({
                                         <div><strong>Late Minutes:</strong> {r.late_minutes} min</div>
                                         <div><strong>Overtime Minutes:</strong> {r.overtime_minutes} min</div>
                                         <div><strong>Penalty:</strong> {r.penalty} DA</div>
+                                        <div><strong>Absent:</strong> {r.absent ? 'Yes' : 'No'}</div>
+                                        {r.absent_comment && <div><strong>Comment:</strong> {r.absent_comment}</div>}
                                     </div>
                                     <div style={{ marginTop: 8, fontWeight: 600, fontSize: 14 }}>
                                         <div><strong>Salary for Day:</strong> {salary} DA</div>
@@ -453,6 +844,7 @@ export default function ReportingContent({
                                     <Card label="Total Late Minutes" value={`${weekSummary.totalLate || 0} min`} />
                                     <Card label="Total Consommation" value={`${weekSummary.totalConsommation || 0} DA`} />
                                     <Card label="Total Penalties" value={`${weekSummary.totalPenalties || 0} DA`} />
+                                    <Card label="Total Absences" value={`${weekSummary.totalAbsences || 0}`} />
                                 </>
                             ) : (
                                 <>
@@ -462,6 +854,7 @@ export default function ReportingContent({
                                     <Card label="Total Late Minutes" value={`${monthSummary.totalLate || 0} min`} />
                                     <Card label="Total Consommation" value={`${monthSummary.totalConsommation || 0} DA`} />
                                     <Card label="Total Penalties" value={`${monthSummary.totalPenalties || 0} DA`} />
+                                    <Card label="Total Absences" value={`${monthSummary.totalAbsences || 0} `} />
                                 </>
                             )}
                         </div>
@@ -480,7 +873,7 @@ export default function ReportingContent({
                             <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                                 <thead style={{ background: "#fed7aa" }}>
                                     <tr>
-                                        {["Date", "Hours", "Late (min)", "Overtime", "Penalty", "Consommation"].map((h) => (
+                                        {["Date", "Hours", "Late (min)", "Overtime", "Penalty", "Consommation", "Absent"].map((h) => (
                                             <th key={h} style={{ padding: 12, textAlign: "center", fontWeight: 600, color: "#374151", width: h === "Date" ? "200px" : "auto" }}>
                                                 {h}
                                             </th>
@@ -504,12 +897,20 @@ export default function ReportingContent({
                                                     <td style={{ textAlign: "center" }}>{r.overtime_minutes || 0}</td>
                                                     <td style={{ textAlign: "center" }}>{r.penalty || 0}</td>
                                                     <td style={{ textAlign: "center" }}>{r.consommation || 0}</td>
+                                                    <td style={{ textAlign: "center", color: r.absent ? "#dc2626" : "#10b981", fontWeight: r.absent ? 600 : 400 }}>
+                                                        {r.absent ? "Yes" : ""}
+                                                        {r.absent && r.absent_comment && (
+                                                            <div style={{ fontSize: 11, color: "#6b7280", fontStyle: "italic", marginTop: 2 }}>
+                                                                {r.absent_comment}
+                                                            </div>
+                                                        )}
+                                                    </td>
                                                 </tr>
                                             );
                                         })
                                     ) : (
                                         <tr>
-                                            <td colSpan={6} style={{ textAlign: "center", padding: 20 }}>No data available</td>
+                                            <td colSpan={7} style={{ textAlign: "center", padding: 20 }}>No data available</td>
                                         </tr>
                                     )}
                                 </tbody>
