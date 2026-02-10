@@ -337,7 +337,13 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
 
     // handle overnight shift ending at 00:00
     if (shiftEndM === 0) shiftEndM = 24 * 60;
-    if (clockOutM < shiftEndM) clockOutM += 24 * 60;
+    
+    // Only add 24 hours to clockOut if it's actually an overnight situation
+    // (i.e., shift crosses midnight AND clockOut is in the early morning hours)
+    if (shiftEndM === 24 * 60 && clockOutM < 12 * 60) {
+      // Shift ends at midnight, and clock out is in early morning (00:00 - 11:59)
+      clockOutM += 24 * 60;
+    }
 
     const overtime = clockOutM - shiftEndM;
     return overtime > 0 ? overtime : 0;
