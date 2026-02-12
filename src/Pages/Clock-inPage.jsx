@@ -233,6 +233,7 @@ function AuthenticatedContent({
       const cached = localStorage.getItem(cacheKey);
 
       if (cached) {
+        console.log("🫣🫣🫣🫣 It uses the cache.");
         setEmployees(JSON.parse(cached));
         setLoading(false);
         return;
@@ -251,7 +252,7 @@ function AuthenticatedContent({
           clockOut: "00:00",
           shift: 0,
         }));
-
+        console.log("🏃👷👷👷👷👷👷Employees fetched: ",transformedEmployees);
         const employeesWithShifts = await Promise.all(
           transformedEmployees.map(async emp => {
             try {
