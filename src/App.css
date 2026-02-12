@@ -1,2 +1,35 @@
 
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between; /* keeps logo left */
+  padding: 0 40px;
+}
+
+/* LEFT SIDE */
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* CENTER NAVIGATION */
+.navbar {
+  flex: 1;                 /* take full available space */
+  display: flex;
+  justify-content: center; /* center horizontally */
+}
+
+.navbar ul {
+  display: flex;
+  list-style: none;
+  gap: 30px;
+  padding: 0;
+  margin: 0;
+}
+
+.navbar a {
+  text-decoration: none;
+  font-weight: 500;
+}
 
