@@ -107,14 +107,7 @@ export default function Planning() {
         { id: 12, name: "Pate" }
     ];
 
-    // const shifts = [
-    //     { id: 1, name: "7:00-14:00 (1)", time: "6:00-14:00" },
-    //     { id: 2, name: "8:00-16:00 (2)", time: "8:00-16:00" },
-    //     { id: 3, name: "16:00-23:00 (3)", time: "16:00-00:00" }
-    // ];
     const [shifts, setShifts] = useState([]);
-
-    //here was get week days.
 
 
     const dayNames = ['Saturday', 'Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
@@ -135,7 +128,8 @@ export default function Planning() {
         let isMounted = true;
 
         const transform = (employeesData) => employeesData.map(emp => ({
-            name: emp.name,
+            FirstName: emp.FirstName,
+            LastName: emp.LastName,
             emp_id: emp.emp_id || emp.id
         }));
 
@@ -216,27 +210,7 @@ export default function Planning() {
         setActiveTab(idx !== -1 ? idx : 0);
     }, [weekDates]);
 
-    // useEffect(() => {
-    // const loadShifts = async () => {
-    //     try {
-    //         const data = await shiftApi.getShifts();
-    //         // map shifts
-    //         setShifts(
-    //             data.map((s, index) => ({
-    //                 id: s.shift_id,
-    //                 //To ignore seconds part(16:00:00 > 16:00)
-    //                 name: `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`,
-    //                 time: `${s.start_time.slice(0,5)} - ${s.end_time.slice(0,5)}`,
-    //             }))
-    //         );
-    //         console.log("Shifts loaded:", data);
-    //     } catch (err) {
-    //         console.error("Failed to fetch shifts:", err);
-    //     }
-    // };
-
-    //     loadShifts();
-    // }, []);
+    
     useEffect(() => {
         const loadShifts = async () => {
             try {
@@ -283,7 +257,9 @@ export default function Planning() {
                 if (!alreadyExists) {
                     planningDataRefs.current[date][key].push({
                         emp_id: assignment.emp_id,
-                        employee_name: assignment.employee_name,
+                        employee_FirstName: assignment.employee_FirstName,
+                        employee_LastName: assignment.employee_LastName,
+                        // employee_name: assignment.employee_name,
                         task_id: assignment.task_id,
                         shift_id: assignment.shift_id,
                         plan_date: date,
@@ -328,8 +304,11 @@ export default function Planning() {
                 emp_id: employee.emp_id,
                 task_id: postId,
                 plan_date: date,
-                employee_name: employee.name
+                // employee_name: employee.name
+                employee_FirstName: employee.FirstName,
+                employee_LastName: employee.LastName
             });
+           
         }
     };
 
@@ -344,79 +323,24 @@ export default function Planning() {
         if (Array.isArray(entry)) {
             return entry.map(e => ({
                 emp_id: e.emp_id,
-                name: e.employee_name || employees.find(emp => emp.emp_id === e.emp_id)?.name || "Unknown"
+                // name: e.employee_name || employees.find(emp => emp.emp_id === e.emp_id)?.name || "Unknown"
+                FirstName: e.employee_FirstName || employees.find(emp => emp.emp_id === e.emp_id)?.FirstName || "Unknown",
+                LastName: e.employee_LastName || employees.find(emp => emp.emp_id === e.emp_id)?.LastName || ""
             }));
         }
 
         if (entry.emp_id) {
             return [{
                 emp_id: entry.emp_id,
-                name: entry.employee_name || employees.find(emp => emp.emp_id === entry.emp_id)?.name || "Unknown"
+                // name: entry.employee_name || employees.find(emp => emp.emp_id === entry.emp_id)?.name || "Unknown"
+                FirstName: e.employee_FirstName || employees.find(emp => emp.emp_id === e.emp_id)?.FirstName || "Unknown",
+                LastName: e.employee_LastName || employees.find(emp => emp.emp_id === e.emp_id)?.LastName || ""
             }];
         }
 
         return [];
     };
 
-    //NEWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW
-    // const savePlanning = async (date, silent = false) => {
-    // const currentDate = date; // take the date passed in
-
-    // try {
-    //     if (!silent) setSaving(true);
-
-    //     const dayData = planningDataRefs.current?.[currentDate] || {};
-    //     const planningArray = [];
-
-    //     Object.entries(dayData).forEach(([key, employees]) => {
-    //         if (!employees) return;
-
-    //         const [postId, shiftId] = key.split('-');
-
-    //         if (Array.isArray(employees)) {
-    //             employees.forEach(emp => {
-    //                 if (emp?.emp_id) {
-    //                     planningArray.push({
-    //                         shift_id: parseInt(shiftId),
-    //                         emp_id: emp.emp_id,
-    //                         task_id: parseInt(postId),
-    //                         plan_date: currentDate,
-    //                     });
-    //                 }
-    //             });
-    //         } else if (employees.emp_id) {
-    //             planningArray.push({
-    //                 shift_id: parseInt(shiftId),
-    //                 emp_id: employees.emp_id,
-    //                 task_id: parseInt(postId),
-    //                 plan_date: currentDate,
-    //             });
-    //         }
-    //     });
-
-    //     if (planningArray.length === 0) {
-    //         if (!silent) alert("No planning to save!");
-    //         return;
-    //     }
-
-    //     await planningApi.savePlanning({
-    //         plan_date: currentDate,
-    //         assignments: planningArray,
-    //     });
-
-    //     if (!silent) {
-    //         alert(`Planning for ${formatDateDisplay(currentDate)} saved!`);
-    //     }
-
-    //     await loadExistingPlanningForTab(activeTab);
-
-    // } catch (err) {
-    //     console.error(err);
-    //     if (!silent) alert(err.message);
-    // } finally {
-    //     if (!silent) setSaving(false);
-    // }
-    // };
     const savePlanning = async (date, silent = false) => {
         const currentDate = date;
 
@@ -849,64 +773,68 @@ export default function Planning() {
 
                                     <td key={shift.id}>
 
-                                        {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).map(emp => (
-                                            <div
-                                                key={emp.emp_id}
-                                                style={{
-                                                    position: "relative",       // required for hover buttons
-                                                    cursor: "pointer",
-                                                    color: "#EB4219",
-                                                    fontWeight: "bold",
-                                                    padding: "2px 0",
-                                                    display: "flex",            // make employee and buttons inline
-                                                    alignItems: "center",
-                                                    gap: "4px"                  // space between name and buttons
-                                                }}
-                                                onMouseEnter={() => setHoveredEmployee(emp.emp_id)}
-                                                onMouseLeave={() => setHoveredEmployee(null)}
-                                            >
-                                                <span>{emp.name}</span>
+                                            {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).map(emp => (
+                                                <div
+                                                    key={emp.emp_id}
+                                                    style={{
+                                                        position: "relative",
+                                                        cursor: "pointer",
+                                                        color: "#EB4219",
+                                                        fontWeight: "bold",
+                                                        padding: "2px 0",
+                                                        display: "flex",
+                                                        alignItems: "center",
+                                                        gap: "4px"
+                                                    }}
+                                                    onMouseEnter={() => setHoveredEmployee(emp.emp_id)}
+                                                    onMouseLeave={() => setHoveredEmployee(null)}
+                                                >
+                                                    <span>{emp.FirstName}</span>
+                                                    <span>{emp.LastName}</span>
 
-                                                {hoveredEmployee === emp.emp_id && (
-                                                    <>
-                                                        <button
-                                                            type="button"
-                                                            style={{
-                                                                fontSize: "14px",
-                                                                cursor: "pointer",
-                                                                background: "#4CAF50",
-                                                                color: "white",
-                                                                border: "none",
-                                                                borderRadius: "3px",
-                                                                padding: "2px 6px"
-                                                            }}
-                                                            onClick={() => setDropdownVisibleFor(emp.emp_id)}
-                                                        >
-                                                            +
-                                                        </button>
+                                                    {hoveredEmployee === emp.emp_id && (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                style={{
+                                                                    fontSize: "14px",
+                                                                    cursor: "pointer",
+                                                                    background: "#4CAF50",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: "3px",
+                                                                    padding: "2px 6px"
+                                                                }}
+                                                                onClick={() => setDropdownVisibleFor(`${post.id}-${shift.id}`)} // ✅ Changé: utilise post+shift au lieu de emp_id
+                                                            >
+                                                                +
+                                                            </button>
 
-                                                        <button
-                                                            type="button"
-                                                            style={{
-                                                                fontSize: "14px",
-                                                                cursor: "pointer",
-                                                                background: "#EB4219",
-                                                                color: "white",
-                                                                border: "none",
-                                                                borderRadius: "3px",
-                                                                padding: "2px 6px"
-                                                            }}
-                                                            onClick={() =>
-                                                                handleRemoveEmployee(post.id, shift.id, emp.emp_id, getCurrentDate())
-                                                            }
-                                                        >
-                                                            -
-                                                        </button>
-                                                    </>
-                                                )}
+                                                            <button
+                                                                type="button"
+                                                                style={{
+                                                                    fontSize: "14px",
+                                                                    cursor: "pointer",
+                                                                    background: "#EB4219",
+                                                                    color: "white",
+                                                                    border: "none",
+                                                                    borderRadius: "3px",
+                                                                    padding: "2px 6px"
+                                                                }}
+                                                                onClick={() =>
+                                                                    handleRemoveEmployee(post.id, shift.id, emp.emp_id, getCurrentDate())
+                                                                }
+                                                            >
+                                                                -
+                                                            </button>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            ))}
 
-                                                {/* Dropdown for adding another employee */}
-                                                {dropdownVisibleFor === emp.emp_id && (
+                                            {/* ✅ Dropdown déplacé EN DEHORS du map - au niveau du shift */}
+                                            {dropdownVisibleFor === `${post.id}-${shift.id}` && (
+                                                <div style={{ marginTop: "8px" }}>
                                                     <DropDownList
                                                         employees={employees.filter(e =>
                                                             !(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).some(sel => sel.emp_id === e.emp_id)
@@ -916,9 +844,9 @@ export default function Planning() {
                                                             setDropdownVisibleFor(null);
                                                         }}
                                                     />
-                                                )}
-                                            </div>
-                                        ))}
+                                                </div>
+                                            )
+                                            }
 
                                         {/* Initial dropdown if no employees assigned yet */}
                                         {(getSelectedEmployee(post.id, shift.id, getCurrentDate()) || []).length === 0 && (

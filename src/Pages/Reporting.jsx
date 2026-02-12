@@ -113,6 +113,7 @@ export default function Reporting() {
       if (!response.ok) throw new Error("Failed to fetch report.");
 
       const data = await response.json();
+      
       setRows(data.rows || []);
       setSummary(data.summary || null);
     } catch (err) {
@@ -303,7 +304,7 @@ export default function Reporting() {
                 <strong>All Employees</strong>
                 <div style={{ fontSize: 12, color: "#6b7280" }}>Global Statistics</div>
               </div>
-
+              
               <input
                 placeholder="Search employee..."
                 style={{
@@ -317,29 +318,33 @@ export default function Reporting() {
                 onChange={(e) => {
                   const q = e.target.value.toLowerCase();
                   setEmployees((prev) =>
-                    prev.map((emp) => ({ ...emp, _visible: (emp.name || "").toLowerCase().includes(q) }))
+                    prev.map((emp) => {
+                      const fullName = `${emp.FirstName || ""} ${emp.LastName || ""}`.toLowerCase();
+                      return { ...emp, _visible: fullName.includes(q) };
+                    })
                   );
                 }}
               />
+              
               {employees
-                .filter((emp) => emp._visible !== false)
-                .map((emp) => (
-                  <div
-                    key={emp.emp_id || emp.id}
-                    onClick={() => setSelectedEmployeeId(emp.emp_id || emp.id)}
-                    style={{
-                      padding: 10,
-                      borderRadius: 10,
-                      marginBottom: 6,
-                      cursor: "pointer",
-                      background: selectedEmployeeId === (emp.emp_id || emp.id) ? "#fed7aa" : "#fff7ed",
-                      border: selectedEmployeeId === (emp.emp_id || emp.id) ? "1px solid #f97316" : "1px solid #d1d5db",
-                    }}
-                  >
-                    <strong>{emp.name}</strong>
-                    <div style={{ fontSize: 12, color: "#6b7280" }}>#{emp.emp_id}</div>
-                  </div>
-                ))}
+              .filter((emp) => emp._visible !== false)
+              .map((emp) => (
+                <div
+                  key={emp.emp_id || emp.id}
+                  onClick={() => setSelectedEmployeeId(emp.emp_id || emp.id)}
+                  style={{
+                    padding: 10,
+                    borderRadius: 10,
+                    marginBottom: 6,
+                    cursor: "pointer",
+                    background: selectedEmployeeId === (emp.emp_id || emp.id) ? "#fed7aa" : "#fff7ed",
+                    border: selectedEmployeeId === (emp.emp_id || emp.id) ? "1px solid #f97316" : "1px solid #d1d5db",
+                  }}
+                >
+                  <strong>{emp.FirstName} {emp.LastName}</strong>
+                  <div style={{ fontSize: 12, color: "#6b7280" }}>#{emp.emp_id}</div>
+                </div>
+              ))}
             </div>
           )}
         </aside>

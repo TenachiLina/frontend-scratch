@@ -47,6 +47,8 @@ function ClockInPage() {
   const [plannedShift, setPlannedShift] = useState(null); 
   const [selectedShifts, setSelectedShifts] = useState({});
 
+ 
+
   // Handle password submission
   const handlePasswordSubmit = (e) => {
     e.preventDefault();
@@ -57,6 +59,7 @@ function ClockInPage() {
     } else {
       setShowPasswordError(true);
       setPasswordInput("");
+
     }
   };
 
@@ -136,7 +139,7 @@ function ClockInPage() {
     );
   }
 
-  // REST OF THE COMPONENT (only shown if authenticated)
+
 
   return <AuthenticatedContent 
     employees={employees}
@@ -239,8 +242,10 @@ function AuthenticatedContent({
         const employeesData = await employeesApi.getEmployees();
 
         const transformedEmployees = employeesData.map(emp => ({
+          empNumber: emp.emp_number,
           num: emp.emp_id,
-          name: emp.name,
+          FirstName: emp.FirstName,  // ✅ Ajouté
+          LastName: emp.LastName,    // ✅ Ajouté
           clockIn: "00:00",
           clockOut: "00:00",
           shift: 0,
