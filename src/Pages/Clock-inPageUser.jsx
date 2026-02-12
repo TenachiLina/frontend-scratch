@@ -162,11 +162,13 @@ useEffect(() => {
       const employeesData = await employeesApi.getEmployees();
 
       const transformedEmployees = employeesData.map(emp => ({
-        num: emp.emp_id,
-        name: emp.name,
-        clockIn: "00:00",
-        clockOut: "00:00",
-        shift: 0,
+          empNumber: emp.emp_number,
+          num: emp.emp_id,
+          FirstName: emp.FirstName,  // ✅ Ajouté
+          LastName: emp.LastName,    // ✅ Ajouté
+          clockIn: "00:00",
+          clockOut: "00:00",
+          shift: 0,
       }));
 
       const employeesWithShifts = await Promise.all(
