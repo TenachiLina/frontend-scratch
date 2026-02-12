@@ -16,7 +16,8 @@ export default function Emp_Management() {
   const [employeeForm, setEmployeeForm] = useState({
     emp_number: "",
     personal_image: null,
-    name: "",
+    FirstName: "",
+    LastName:"",
     Base_salary: "",
     address: "",
     phone_number: "",
@@ -79,10 +80,12 @@ export default function Emp_Management() {
         // Check name + phone combination
         const namePhoneDuplicate = employees.some(
           (emp) =>
-            emp.name.trim().toLowerCase() === employeeForm.name.trim().toLowerCase() &&
-            emp.phone_number.trim() === employeeForm.phone_number.trim()
+            emp.FirstName?.trim().toLowerCase() === employeeForm.FirstName.trim().toLowerCase() &&
+            emp.LastName?.trim().toLowerCase() === employeeForm.LastName.trim().toLowerCase() &&
+            emp.phone_number?.trim() === employeeForm.phone_number.trim()
         );
-        if (namePhoneDuplicate) duplicateMessages.push("Name & Phone");
+
+        if (namePhoneDuplicate) duplicateMessages.push("Full Name & Phone");
 
         // If any duplicates found, alert
         if (duplicateMessages.length > 0) {
@@ -115,7 +118,8 @@ export default function Emp_Management() {
       setEmployeeForm({
         emp_number: "",
         personal_image: null,
-        name: "",
+        FirstName: "",
+        LastName:"",
         Base_salary: "",
         address: "",
         phone_number: "",
@@ -163,7 +167,8 @@ export default function Emp_Management() {
     setEmployeeForm({
       emp_number: emp.emp_number,
       personal_image: null, // image optional
-      name: emp.name,
+      FirstName: emp.FirstName,
+      LastName: emp.LastName,
       Base_salary: emp.Base_salary,
       address: emp.address,
       phone_number: emp.phone_number,
@@ -189,7 +194,8 @@ export default function Emp_Management() {
               setEmployeeForm({
                 personal_image: null,
                 emp_number: "",
-                name: "",
+                FirstName: "",
+                LastName: "",
                 Base_salary: "",
                 address: "",
                 phone_number: "",
@@ -206,7 +212,8 @@ export default function Emp_Management() {
               <tr>
                 <th>Employee number</th>
                 <th>Photo</th>
-                <th>Full Name</th>
+                <th>First Name</th>
+                <th>Last Name</th>
                 <th>Base Salary</th>
                 <th>Address</th>
                 <th>Phone</th>
@@ -232,7 +239,8 @@ export default function Emp_Management() {
                         style={{ width: "50px", borderRadius: "50%" }}
                       />
                     </td>
-                    <td>{emp.name}</td>
+                    <td>{emp.FirstName}</td>
+                    <td>{emp.LastName}</td>
                     <td>{emp.Base_salary}</td>
                     <td>{emp.address}</td>
                     <td>{emp.phone_number}</td>
@@ -264,8 +272,11 @@ export default function Emp_Management() {
                 <label>Personal Image:</label>
                 <input type="file" name="personal_image" accept="image/*" onChange={handleChange} />
 
-                <label>Name:</label>
-                <input type="text" name="name" value={employeeForm.name} onChange={handleChange} />
+                <label>First Name:</label>
+                <input type="text" name="FirstName" value={employeeForm.FirstName} onChange={handleChange} />
+
+                <label>Last Name:</label>
+                <input type="text" name="LastName" value={employeeForm.LastName} onChange={handleChange} />
 
                 <label>Base Salary:</label>
                 <input type="number" name="Base_salary" value={employeeForm.Base_salary} onChange={handleChange} />

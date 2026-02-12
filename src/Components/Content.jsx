@@ -78,6 +78,9 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
   };
 
   useEffect(() => {
+  }, [employees]);
+
+  useEffect(() => {
     if (!currentTab) {
       setFilteredEmployees([]);
       return;
@@ -733,7 +736,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
             <table border="1" cellPadding="20" cellSpacing="0">
               <thead>
                 <tr>
-                  <th>Full name</th>
+                  <th>Employee</th>
                   <th>Clock in</th>
                   <th>Clock out</th>
                   <th>Consomation</th>
@@ -761,7 +764,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
                         opacity: employeeTimes[key]?.absent ? 0.6 : 1,
                       }}
                     >
-                      <td>{emp.name}</td>
+                      <td>{emp.FirstName}-{emp.empNumber}</td>
                       <td>
                         {!isAbsent(emp.num) && (
                           <>

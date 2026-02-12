@@ -1,67 +1,42 @@
-// import { useState, useEffect } from "react";
-
-// export default function DropDownList({ employees, onSelect, selectedEmployee }) {
-//     const [selectedEmployeeName, setSelectedEmployeeName] = useState("");
-
-//     // Update selected employee when prop changes
-//     useEffect(() => {
-//         if (selectedEmployee) {
-//             setSelectedEmployeeName(selectedEmployee.name);
-//         } else {
-//             setSelectedEmployeeName("");
-//         }
-//     }, [selectedEmployee]);
-
-//     const handleChange = (e) => {
-//         const selectedName = e.target.value;
-//         setSelectedEmployeeName(selectedName);
-
-//         const employee = employees.find(emp => emp.name === selectedName);
-
-//         // Call the onSelect callback with the employee data
-//         if (onSelect) {
-//             onSelect(employee);
-//         }
-//     };
-
-//     return (
-//         <select value={selectedEmployeeName} onChange={handleChange}>
-//             <option value="">Select Employee</option>
-//             {employees.map((employee, index) => (
-//                 <option key={index} value={employee.name}>
-//                     {employee.name}
-//                 </option>
-//             ))}
-//         </select>//another test hopefully the last  
-//     );
-// }
-
-
 import { useState, useEffect } from "react";
 
 export default function DropDownList({ employees, onSelect, selectedEmployee }) {
-    const [selectedEmployeeName, setSelectedEmployeeName] = useState("");
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
 
     useEffect(() => {
         if (selectedEmployee) {
-            setSelectedEmployeeName(selectedEmployee.name);
+            setSelectedEmployeeId(selectedEmployee.emp_id);
         } else {
-            setSelectedEmployeeName("");
+            setSelectedEmployeeId("");
         }
     }, [selectedEmployee]);
 
     const handleChange = (e) => {
-        const selectedName = e.target.value;
-        setSelectedEmployeeName(selectedName);
-        const employee = employees.find(emp => emp.name === selectedName);
+    const selectedId = e.target.value;
+    setSelectedEmployeeId(selectedId);
+    
+    // ✅ Vérifier que selectedId n'est pas vide
+    if (!selectedId) {
         if (onSelect) {
-            onSelect(employee);
+            onSelect(null);
         }
-    };
+        return;
+    }
+    
+    // ✅ Convertir en nombre si emp_id est un nombre
+    const employee = employees.find(emp => emp.emp_id === Number(selectedId));
+    
+    console.log("Selected employee:", employee); // Debug
+    
+    if (onSelect) {
+        onSelect(employee);
+    }
+   };
 
+   
     return (
         <select
-            value={selectedEmployeeName}
+            value={selectedEmployeeId}
             onChange={handleChange}
             style={{
                 width: "100%",
@@ -73,8 +48,8 @@ export default function DropDownList({ employees, onSelect, selectedEmployee }) 
         >
             <option value="">Select Employee</option>
             {employees.map((employee) => (
-                <option key={employee.emp_id} value={employee.name}>
-                    {employee.name}
+                <option key={employee.emp_id} value={employee.emp_id}>
+                    {employee.FirstName} {employee.LastName}
                 </option>
             ))}
         </select>

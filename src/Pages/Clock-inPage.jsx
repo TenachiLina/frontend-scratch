@@ -93,62 +93,13 @@ function ClockInPage() {
     return () => clearInterval(timer); // cleanup on unmount
   }, []);
 
-
-  // FETCH EMPLOYEES
-//   useEffect(() => {
-//     const fetchEmployees = async () => {
-//       setLoading(true);
-//       try {
-//         const employeesData = await employeesApi.getEmployees();
-
-//         const transformedEmployees = employeesData.map(emp => ({
-//           num: emp.emp_id,
-//           name: emp.name,
-//           clockIn: "00:00",
-//           clockOut: "00:00",
-//           shift: 0,
-//         }));
-
-//         const today = currentDate
-//           ? (currentDate instanceof Date ? currentDate.toISOString().split('T')[0] : currentDate)
-//           : new Date().toISOString().split('T')[0];
-
-//         const employeesWithShifts = await Promise.all(
-//           transformedEmployees.map(async emp => {
-//             try {
-//               console.log(`Fetching shift for employee ${emp.num} on date ${today}`);
-//               const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
-//               if (!res.ok) return { ...emp, shift: 0 };
-//               const data = await res.json();
-//               return { ...emp, shift: data.shift_id || 0 };
-//             } catch {
-//               return { ...emp, shift: 0 };
-//             }
-//           })
-//         );
-
-//         setEmployees(employeesWithShifts);
-//         // ❌ REMOVED: Initializing selectedShifts here conflicts with the array logic above.
-//         // The loadShifts effect handles the shift assignments correctly now.
-//         setError(null);
-
-//       } catch (err) {
-//         console.error('Error fetching employees:', err);
-//         setError('Failed to load employees');
-//         setEmployees([]);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
-
-//     fetchEmployees();
-//   }, [currentDate]);
 useEffect(() => {
   if (!currentDate) return;
 
   const cacheKey = `employees_${currentDate}`;
 
   const fetchEmployees = async () => {
+    localStorage.removeItem(cacheKey);
     const cached = localStorage.getItem(cacheKey);
 
     if (cached) {
@@ -160,10 +111,12 @@ useEffect(() => {
     setLoading(true);
     try {
       const employeesData = await employeesApi.getEmployees();
-
+      console.log("👷👷👷 Transformed employees data: ", employeesData);
       const transformedEmployees = employeesData.map(emp => ({
+        empNumber: emp.emp_number,
         num: emp.emp_id,
-        name: emp.name,
+        FirstName: emp.FirstName,  // ✅ Ajouté
+        LastName: emp.LastName,    // ✅ Ajouté
         clockIn: "00:00",
         clockOut: "00:00",
         shift: 0,
@@ -200,8 +153,6 @@ useEffect(() => {
   fetchEmployees();
 }, [currentDate]);
 
-// ... (rest of the component remains unchanged)
-
   // FETCH PLANNED SHIFTS
   const fetchAllPlannedShifts = async (employeesList) => {
     const today = currentDate || new Date().toISOString().split('T')[0];
@@ -226,29 +177,61 @@ useEffect(() => {
   };
 
   // ADD NEW EMPLOYEE
-  const addNewEmployee = async () => {
-    const name = prompt("Enter new employee name:");
-    if (!name) return;
-    try {
-      const newEmployee = await employeesApi.addEmployee({ name });
-      setEmployees(prev => [
-        ...prev,
-        {
-          num: newEmployee.id,
-          name: name,
-          clockIn: "00:00",
-          clockOut: "00:00",
-          shift: 0,
-          delay: "00:00",
-          overtime: "00:00",
-          hours: "00:00"
-        }
-      ]);
-      alert(`Employee "${name}" added successfully!`);
-    } catch (err) {
-      alert('Error adding employee: ' + err.message);
-    }
-  };
+//   const addNewEmployee = async () => {
+//     const name = prompt("Enter new employee name:");
+//     if (!name) return;
+//     try {
+//       const newEmployee = await employeesApi.addEmployee({ name });
+//       setEmployees(prev => [
+//         ...prev,
+//         {
+//           num: newEmployee.id,
+//           name: name,
+//           clockIn: "00:00",
+//           clockOut: "00:00",
+//           shift: 0,
+//           delay: "00:00",
+//           overtime: "00:00",
+//           hours: "00:00"
+//         }
+//       ]);
+//       alert(`Employee "${name}" added successfully!`);
+//     } catch (err) {
+//       alert('Error adding employee: ' + err.message);
+//     }
+//   };
+const addNewEmployee = async () => {
+  const firstName = prompt("Enter employee first name:");
+  if (!firstName) return;
+  
+  const lastName = prompt("Enter employee last name:");
+  if (!lastName) return;
+  
+  try {
+    const newEmployee = await employeesApi.addEmployee({ 
+      FirstName: firstName,
+      LastName: lastName 
+    });
+    
+    setEmployees(prev => [
+      ...prev,
+      {
+        num: newEmployee.id,
+        FirstName: firstName,   // ✅ Changé
+        LastName: lastName,     // ✅ Changé
+        clockIn: "00:00",
+        clockOut: "00:00",
+        shift: 0,
+        delay: "00:00",
+        overtime: "00:00",
+        hours: "00:00"
+      }
+    ]);
+    alert(`Employee "${firstName} ${lastName}" added successfully!`);
+  } catch (err) {
+    alert('Error adding employee: ' + err.message);
+  }
+};
 
   // DELETE EMPLOYEE
   const handleEmployeeDeleted = async (employeeId) => {
@@ -328,10 +311,6 @@ useEffect(() => {
         selectedShifts={selectedShifts}       // ✅ pass the state
         setSelectedShifts={setSelectedShifts} // ✅ pass the setter
         onEmployeeDeleted={handleEmployeeDeleted} />
-      <div className='cntbtns'>
-        <button className='cntbtn' onClick={addNewEmployee}>New Employee</button>
-        <button className='cntbtn' onClick={saveAll}>Save</button>
-      </div>
     </>
   );
 

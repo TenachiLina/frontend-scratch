@@ -44,13 +44,13 @@ export const employeesApi = {
 
   async addEmployee(employeeData) {
   try {
-    console.log(employeeData);
     const formData = new FormData();
 
     if (employeeData.personal_image) {
       formData.append("personal_image", employeeData.personal_image);
     }
-    formData.append("name", employeeData.name);
+    formData.append("FirstName", employeeData.FirstName);
+    formData.append("LastName", employeeData.LastName);
     formData.append("Base_salary", employeeData.Base_salary);
     formData.append("address", employeeData.address);
     formData.append("phone_number", employeeData.phone_number);
@@ -79,8 +79,9 @@ async updateEmployee(employeeId, employeeData) {
 
     formData.append("emp_number", employeeData.emp_number);
     if (employeeData.personal_image)
-      formData.append("personal_image", employeeData.personal_image);
-    formData.append("name", employeeData.name);
+    formData.append("personal_image", employeeData.personal_image);
+    formData.append("FirstName", employeeData.FirstName);
+    formData.append("LastName", employeeData.LastName);
     formData.append("Base_salary", employeeData.Base_salary);
     formData.append("address", employeeData.address);
     formData.append("phone_number", employeeData.phone_number);

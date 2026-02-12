@@ -18,7 +18,6 @@ export default function Header() {
           <li><Link to="/emp-management">Employees Management</Link></li> 
         </ul>
       </nav>
-      <button className="newDay">New Day</button>
     </header>
   );
 }
