@@ -709,7 +709,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
                         opacity: employeeTimes[key]?.absent ? 0.6 : 1,
                       }}
                     >
-                      <td>{emp.name}</td>
+                      <td>{emp.FirstName}-{emp.empNumber}</td>
                       <td>
                         {!isAbsent(emp.num) && (
                           <>
