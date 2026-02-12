@@ -229,6 +229,7 @@ function AuthenticatedContent({
     const cacheKey = `employees_${currentDate}`;
 
     const fetchEmployees = async () => {
+      console.log("🏃👷👷👷👷👷👷Employees fetched: ",employeesData);
       const cached = localStorage.getItem(cacheKey);
 
       if (cached) {
@@ -240,7 +241,7 @@ function AuthenticatedContent({
       setLoading(true);
       try {
         const employeesData = await employeesApi.getEmployees();
-
+        
         const transformedEmployees = employeesData.map(emp => ({
           empNumber: emp.emp_number,
           num: emp.emp_id,

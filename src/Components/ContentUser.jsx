@@ -688,7 +688,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
             <table border="1" cellPadding="20" cellSpacing="0">
               <thead>
                 <tr>
-                  <th>Full name</th>
+                  <th>Employee</th>
                   <th>Clock in</th>
                   <th>Clock out</th>
                 </tr>
