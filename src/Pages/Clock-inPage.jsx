@@ -226,7 +226,7 @@ function AuthenticatedContent({
   useEffect(() => {
     if (!currentDate) return;
 
-    localStorage.removeItem(`employees_${currentDate}`);
+    // localStorage.removeItem(`employees_${currentDate}`);
     const cacheKey = `employees_${currentDate}`;
 
     const fetchEmployees = async () => {
