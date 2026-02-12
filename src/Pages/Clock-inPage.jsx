@@ -242,8 +242,10 @@ function AuthenticatedContent({
         const employeesData = await employeesApi.getEmployees();
 
         const transformedEmployees = employeesData.map(emp => ({
+          empNumber: emp.emp_number,
           num: emp.emp_id,
-          name: emp.name,
+          FirstName: emp.FirstName,  // ✅ Ajouté
+          LastName: emp.LastName,    // ✅ Ajouté
           clockIn: "00:00",
           clockOut: "00:00",
           shift: 0,
