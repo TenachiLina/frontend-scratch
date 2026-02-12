@@ -570,26 +570,7 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
           
           <div style={{ marginLeft: "35px", marginTop: "20px" }}>
             <div style={{ marginLeft: "35px", marginTop: "20px" }}>
-              {/* ADD SHIFT button */}
-              <button
-                onClick={() => {
-                  setNewShift({ start_time: "", end_time: "" });
-                  setEditingShift(null);
-                  setShowAddForm(true);
-                }}
-                style={{
-                  padding: "10px 15px",
-                  marginBottom: "15px",
-                  borderRadius: "8px",
-                  fontWeight: "bold",
-                  backgroundColor: "#28a745",
-                  color: "white",
-                  border: "none",
-                  cursor: "pointer",
-                }}
-              >
-                + ADD SHIFT
-              </button>
+             
 
               {/* ADD + EDIT Shift Form (same form) */}
               {showAddForm && (
@@ -694,35 +675,9 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
                       Shift ({shift.start_time} - {shift.end_time})
                     </button>
 
-                    {/* Edit */}
-                    <button
-                      onClick={() => handleEditShift(shift)}
-                      style={{
-                        padding: "5px 10px",
-                        borderRadius: "5px",
-                        border: "none",
-                        backgroundColor: "#28a745",
-                        color: "white",
-                        cursor: "pointer",
-                      }}
-                    >
-                      ✏️
-                    </button>
+                    
 
-                    {/* Delete */}
-                    <button
-                      onClick={() => handleDeleteShift(shift.shift_id)}
-                      style={{
-                        padding: "5px 10px",
-                        borderRadius: "5px",
-                        border: "none",
-                        backgroundColor: "#dc3545",
-                        color: "white",
-                        cursor: "pointer",
-                      }}
-                    >
-                      🗑️
-                    </button>
+                    
                   </div>
                 ))}
               </div>
