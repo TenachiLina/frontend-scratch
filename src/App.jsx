@@ -20,6 +20,8 @@
 import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
 import './App.css';
 import ClockInOut from "./Pages/Clock-inPage";
+import ClockInOutUser from "./Pages/Clock-inPageUser";
+
 import Planning from "./Pages/PlanningPage";
 import Reporting from "./Pages/Reporting";
 import Home from "./Pages/Home";
@@ -35,6 +37,7 @@ function App() {
         <Route path="/planning" element={<Planning />} />
         <Route path="/reporting" element={<Reporting />} />
         <Route path="/emp-management" element={<Emp_Management />} /> 
+        <Route path="/ClockInOutUser" element={<ClockInOutUser />} /> 
       </Routes>
     </Router>
   );

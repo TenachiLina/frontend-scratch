@@ -12,10 +12,12 @@ export default function Header() {
       <nav className="navbar">
         <ul>
           <li><Link to="/">Home</Link></li>
-          <li><Link to="/clock-in">Clockin</Link></li>
+          <li><Link to="/ClockInOutUser">Clockin</Link></li>
           <li><Link to="/planning">Planning</Link></li>
           <li><Link to="/reporting">Reporting</Link></li>
           <li><Link to="/emp-management">Employees Management</Link></li> 
+          <li><Link to="/clock-in">Manager</Link></li> 
+
         </ul>
       </nav>
     </header>
