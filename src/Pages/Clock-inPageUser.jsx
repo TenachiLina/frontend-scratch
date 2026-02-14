@@ -1,343 +1,801 @@
 import '../App.css'
-import Header from "../Components/HeaderUser"
-import Content from "../Components/ContentUser"
-import TextField from "../Components/TextField"
+import Header from "../AuthContext/HeaderUser"
 import { useState, useEffect } from "react";
 import { employeesApi } from "../services/employeesAPI";
 import { worktimeApi } from "../services/worktimeAPI";
+import { shiftApi } from "../services/shfitAPI";
+import { planningApi } from "../services/planningAPI";
 import { API_BASE_URL } from "../services/config";
+import {
+  saveWorktimeToLocalStorage,
+  loadAllWorktimeForDate,
+  clearEmployeeCache
+} from "../services/worktimeSync";
 
-// Function to calculate work hours, late minutes, and overtime
-function calculateWorkTime(shiftStart, shiftEnd, clockIn, clockOut) {
-  // ... (calculateWorkTime function remains unchanged)
-  const toMinutes = time => {
-    const [h, m] = time.split(':').map(Number);
-    return h * 60 + m;
-  };
+function ClockInOutUser() {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [currentDate, setCurrentDate] = useState('');
+  const [employeeShifts, setEmployeeShifts] = useState({});
+  const [selectedShiftsForDate, setSelectedShiftsForDate] = useState([]);
+  const [currentTab, setCurrentTab] = useState(null);
+  const [filteredEmployees, setFilteredEmployees] = useState([]);
+  const [employeeTimes, setEmployeeTimes] = useState({});
 
-  const shiftStartM = toMinutes(shiftStart);
-  const shiftEndM = toMinutes(shiftEnd);
-  const clockInM = toMinutes(clockIn);
-  const clockOutM = toMinutes(clockOut);
+  // GET CURRENT DATE
+  useEffect(() => {
+    const updateDate = () => {
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      setCurrentDate(`${yyyy}-${mm}-${dd}`);
+    };
 
-  const lateMinutes = Math.max(0, clockInM - shiftStartM);
-  const workedMinutes = clockOutM - clockInM;
-  const shiftMinutes = shiftEndM - shiftStartM;
-  const overtimeMinutes = Math.max(0, workedMinutes - shiftMinutes);
-  const workHours = Math.floor(workedMinutes / 60);
+    updateDate();
+    const timer = setInterval(updateDate, 60 * 1000);
+    return () => clearInterval(timer);
+  }, []);
 
-  return { workHours, lateMinutes, overtimeMinutes };
-}
+  // FORMAT DATE FOR DISPLAY
+  const formatDateDisplay = (dateString) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+      weekday: 'long',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric'
+    });
+  };
 
-function ClockInPage() {
-  const [employees, setEmployees] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentDate, setCurrentDate] = useState('');
-  const [plannedShift, setPlannedShift] = useState(null); 
-  const [selectedShifts, setSelectedShifts] = useState({});
+  // LOAD SHIFTS THAT ARE USED IN PLANNING FOR TODAY
+  useEffect(() => {
+    const loadSelectedShiftsForDate = async () => {
+      if (!currentDate) return;
 
- useEffect(() => {
- const loadShifts = async () => {
- if (!currentDate) return;
+      try {
+        const planningData = await planningApi.getPlanning(currentDate);
 
- try {
- // Use the standard reduce pattern to build the map
- const updatedShifts = await employees.reduce(async (accPromise, emp) => {
- const acc = await accPromise; // Resolve the accumulator promise
+        // Extract unique shift IDs from planning
+        const usedShiftIds = new Set();
+        planningData.forEach(assignment => {
+          if (assignment.shift_id) {
+            usedShiftIds.add(assignment.shift_id);
+          }
+        });
 
- // IMPORTANT: Change the API endpoint to return ALL shifts for the day
- const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`); 
- if (!res.ok) return acc;
- 
- // ASSUME the API returns an ARRAY of shift objects
- const data = await res.json(); 
- 
- // Extract all shift IDs into an array
- const shiftIds = data
- .map(shift => shift.shift_id ? shift.shift_id.toString() : null)
- .filter(id => id !== null); // Remove null/undefined
+        // Fetch all shifts to get their details
+        const allShifts = await shiftApi.getShifts();
 
- acc[emp.num] = shiftIds; // Store the ARRAY of shifts
+        // Filter and sort shifts that are used in planning
+        const shiftsForDate = allShifts
+          .filter(shift => usedShiftIds.has(shift.shift_id))
+          .sort((a, b) => {
+            const timeToMinutes = (time) => {
+              const [h, m] = time.split(":").map(Number);
+              return h * 60 + m;
+            };
+            return timeToMinutes(a.start_time) - timeToMinutes(b.start_time);
+          });
 
- return acc;
- }, Promise.resolve({})); // Start with an empty object resolve to handle async/await
+        setSelectedShiftsForDate(shiftsForDate);
 
- // This is the correct array-based assignment
- setSelectedShifts(updatedShifts); 
- } catch (err) {
- console.error("Error fetching shifts:", err);
- setSelectedShifts({});
- }
- };
+        if (shiftsForDate.length > 0) {
+          setCurrentTab(shiftsForDate[0].shift_id);
+        }
+      } catch (err) {
+        console.error("Error loading shifts for date:", err);
+        setSelectedShiftsForDate([]);
+      }
+    };
 
- loadShifts();
-  }, [currentDate, employees]); // ✅ run whenever date or employees change
+    loadSelectedShiftsForDate();
+  }, [currentDate]);
 
+  // FETCH EMPLOYEES WITH CACHING - ONLY THOSE IN PLANNING
+  useEffect(() => {
+    if (!currentDate) return;
 
+    const cacheKey = `employees_${currentDate}`;
 
+    const fetchEmployees = async () => {
+      const cached = localStorage.getItem(cacheKey);
 
-  // GET CURRENT DATE (local time)
-  useEffect(() => {
-    const updateDate = () => {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      setCurrentDate(`${yyyy}-${mm}-${dd}`);
-    };
+      if (cached) {
+        try {
+          const parsedCache = JSON.parse(cached);
+          setEmployees(parsedCache);
+          setLoading(false);
+          return;
+        } catch (e) {
+          console.error('Cache parse error:', e);
+          localStorage.removeItem(cacheKey);
+        }
+      }
 
-    updateDate(); // set immediately
-    const timer = setInterval(updateDate, 60 * 1000); // update every minute
+      setLoading(true);
+      try {
+        // Get planning data first to know which employees are scheduled
+        const planningData = await planningApi.getPlanning(currentDate);
+        const scheduledEmployeeIds = new Set(planningData.map(p => p.emp_id));
 
-    return () => clearInterval(timer); // cleanup on unmount
-  }, []);
+        if (scheduledEmployeeIds.size === 0) {
+          setEmployees([]);
+          setLoading(false);
+          return;
+        }
 
+        // Get all employees
+        const employeesData = await employeesApi.getEmployees();
 
-  // FETCH EMPLOYEES
-//   useEffect(() => {
-//     const fetchEmployees = async () => {
-//       setLoading(true);
-//       try {
-//         const employeesData = await employeesApi.getEmployees();
+        // Filter only scheduled employees
+        const transformedEmployees = employeesData
+          .filter(emp => scheduledEmployeeIds.has(emp.emp_id))
+          .map(emp => ({
+            empNumber: emp.emp_number,
+            num: emp.emp_id,
+            FirstName: emp.FirstName,
+            LastName: emp.LastName,
+            clockIn: "00:00",
+            clockOut: "00:00",
+            shift: 0,
+          }));
 
-//         const transformedEmployees = employeesData.map(emp => ({
-//           num: emp.emp_id,
-//           name: emp.name,
-//           clockIn: "00:00",
-//           clockOut: "00:00",
-//           shift: 0,
-//         }));
+        setEmployees(transformedEmployees);
+        localStorage.setItem(cacheKey, JSON.stringify(transformedEmployees));
+        setError(null);
 
-//         const today = currentDate
-//           ? (currentDate instanceof Date ? currentDate.toISOString().split('T')[0] : currentDate)
-//           : new Date().toISOString().split('T')[0];
+      } catch (err) {
+        console.error('Error fetching employees:', err);
+        setError('Failed to load employees');
+        setEmployees([]);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-//         const employeesWithShifts = await Promise.all(
-//           transformedEmployees.map(async emp => {
-//             try {
-//               console.log(`Fetching shift for employee ${emp.num} on date ${today}`);
-//               const res = await fetch(`http://localhost:3001/api/planning/employee-shift/${emp.num}/${today}`);
-//               if (!res.ok) return { ...emp, shift: 0 };
-//               const data = await res.json();
-//               return { ...emp, shift: data.shift_id || 0 };
-//             } catch {
-//               return { ...emp, shift: 0 };
-//             }
-//           })
-//         );
+    fetchEmployees();
+  }, [currentDate]);
 
-//         setEmployees(employeesWithShifts);
-//         // ❌ REMOVED: Initializing selectedShifts here conflicts with the array logic above.
-//         // The loadShifts effect handles the shift assignments correctly now.
-//         setError(null);
+  // LOAD ALL SHIFTS FOR EACH EMPLOYEE FROM PLANNING
+  useEffect(() => {
+    const loadShifts = async () => {
+      if (!currentDate || employees.length === 0) return;
 
-//       } catch (err) {
-//         console.error('Error fetching employees:', err);
-//         setError('Failed to load employees');
-//         setEmployees([]);
-//       } finally {
-//         setLoading(false);
-//       }
-//     };
+      try {
+        const updatedShifts = await employees.reduce(async (accPromise, emp) => {
+          const acc = await accPromise;
 
-//     fetchEmployees();
-//   }, [currentDate]);
-useEffect(() => {
-  if (!currentDate) return;
+          const res = await fetch(
+            `${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`
+          );
+          if (!res.ok) return acc;
 
-  // localStorage.removeItem(`employees_${currentDate}`);
-  const cacheKey = `employees_${currentDate}`;
+          const data = await res.json();
 
-  const fetchEmployees = async () => {
-    
-    const cached = localStorage.getItem(cacheKey);
+          const shiftIds = data
+            .map(shift => shift.shift_id ? shift.shift_id.toString() : null)
+            .filter(id => id !== null);
 
-    if (cached) {
-      setEmployees(JSON.parse(cached));
-      setLoading(false);
+          acc[emp.num] = shiftIds;
+
+          return acc;
+        }, Promise.resolve({}));
+
+        setEmployeeShifts(updatedShifts);
+      } catch (err) {
+        console.error("Error fetching shifts:", err);
+        setEmployeeShifts({});
+      }
+    };
+
+    loadShifts();
+  }, [currentDate, employees]);
+
+  // LOAD EXISTING CLOCK IN/OUT TIMES FROM DATABASE AND LOCALSTORAGE FOR ALL SHIFTS
+  useEffect(() => {
+    const loadExistingTimes = async () => {
+      if (!currentDate || employees.length === 0) return;
+
+      try {
+        const times = {};
+
+        for (const emp of employees) {
+          try {
+            // First check localStorage for instant sync
+            const localStorageKey = `worktime_${emp.num}_${currentDate}`;
+
+            // Check all possible shift IDs in localStorage
+            for (let shiftId = 1; shiftId <= 10; shiftId++) {
+              const localKey = `${localStorageKey}_${shiftId}`;
+              const localData = localStorage.getItem(localKey);
+
+              if (localData) {
+                try {
+                  const parsed = JSON.parse(localData);
+                  const key = `${emp.num}-${shiftId}`;
+                  times[key] = {
+                    clockIn: parsed.clockIn || "00:00",
+                    clockOut: parsed.clockOut || "00:00",
+                    absent: parsed.absent || false,
+                    absentComment: parsed.absentComment || ""
+                  };
+                } catch (e) {
+                  console.error('Error parsing localStorage data:', e);
+                }
+              }
+            }
+
+            // Then fetch from database as backup
+            const res = await fetch(
+              `${API_BASE_URL}/api/worktime/${emp.num}/${currentDate}`
+            );
+
+            if (res.ok) {
+              const data = await res.json();
+
+              // Check if data is an array (multiple shifts) or single object
+              const workTimeRecords = Array.isArray(data) ? data : [data];
+
+              // Store times for each shift this employee has worked (only if not already in localStorage)
+              workTimeRecords.forEach(record => {
+                if (record && record.shift) {
+                  const key = `${emp.num}-${record.shift}`;
+                  if (!times[key]) { // Only use database if not already loaded from localStorage
+                    times[key] = {
+                      clockIn: record.clockIn || "00:00",
+                      clockOut: record.clockOut || "00:00",
+                      absent: false,
+                      absentComment: ""
+                    };
+                  }
+                }
+              });
+            }
+          } catch (err) {
+            console.error(`Error loading time for employee ${emp.num}:`, err);
+          }
+        }
+
+        setEmployeeTimes(times);
+      } catch (err) {
+        console.error("Error loading existing times:", err);
+      }
+    };
+
+    loadExistingTimes();
+
+    // Listen for storage changes from other tabs/windows (cross-tab sync)
+    const handleStorageChange = (e) => {
+      console.log('🎧 USER VIEW: Storage event fired', e.key);
+      // Only update if worktime data changed
+      if (e.key && e.key.startsWith('worktime_')) {
+        console.log('📡 USER VIEW: Storage changed from another tab, updating state smoothly...');
+        // Just update state, don't reload everything
+        const localStorageTimes = loadAllWorktimeForDate(currentDate);
+        setEmployeeTimes(prev => {
+          console.log('🔄 USER VIEW: Updating employeeTimes from', prev, 'to', localStorageTimes);
+          return {
+            ...prev,
+            ...localStorageTimes
+          };
+        });
+      }
+    };
+
+    // Listen for custom events from same page (same-tab sync)
+    const handleWorktimeUpdate = (e) => {
+      console.log('🎧 USER VIEW: Custom event fired', e.detail);
+      console.log('🔥 USER VIEW: Worktime updated event received, updating state smoothly...');
+      // Just update state, don't reload everything
+      const localStorageTimes = loadAllWorktimeForDate(currentDate);
+      setEmployeeTimes(prev => {
+        console.log('🔄 USER VIEW: Updating employeeTimes from', prev, 'to', localStorageTimes);
+        return {
+          ...prev,
+          ...localStorageTimes
+        };
+      });
+    };
+
+    // Listen for simple event too
+    const handleWorktimeChanged = (e) => {
+      console.log('🎧 USER VIEW: Simple worktime-changed event fired');
+      const localStorageTimes = loadAllWorktimeForDate(currentDate);
+      setEmployeeTimes(prev => ({
+        ...prev,
+        ...localStorageTimes
+      }));
+    };
+
+    console.log('👂 USER VIEW: Adding event listeners');
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('worktimeUpdated', handleWorktimeUpdate);
+    window.addEventListener('worktime-changed', handleWorktimeChanged);
+
+    return () => {
+      console.log('🔇 USER VIEW: Removing event listeners');
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('worktimeUpdated', handleWorktimeUpdate);
+      window.removeEventListener('worktime-changed', handleWorktimeChanged);
+    };
+  }, [currentDate, employees]);
+
+  // FILTER EMPLOYEES BY CURRENT TAB
+  useEffect(() => {
+    if (!currentTab) {
+      setFilteredEmployees([]);
       return;
     }
 
-    setLoading(true);
-    try {
-      const employeesData = await employeesApi.getEmployees();
-      console.log("🏃👷👷👷👷👷👷Employees fetched: ",employeesData);
-      const transformedEmployees = employeesData.map(emp => ({
-          empNumber: emp.emp_number,
-          num: emp.emp_id,
-          FirstName: emp.FirstName,  // ✅ Ajouté
-          LastName: emp.LastName,    // ✅ Ajouté
-          clockIn: "00:00",
-          clockOut: "00:00",
-          shift: 0,
-      }));
+    const current = String(currentTab);
+    const newFiltered = employees.filter((emp) => {
+      const assignedShifts = employeeShifts[emp.num];
+      if (!assignedShifts) return false;
+      return Array.isArray(assignedShifts)
+        ? assignedShifts.map(String).includes(current)
+        : String(assignedShifts) === current;
+    });
 
-      const employeesWithShifts = await Promise.all(
-        transformedEmployees.map(async emp => {
-          try {
-            const res = await fetch(
-              `${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${currentDate}`
-            );
-            if (!res.ok) return { ...emp, shift: 0 };
-            const data = await res.json();
-            return { ...emp, shift: data.shift_id || 0 };
-          } catch {
-            return { ...emp, shift: 0 };
-          }
-        })
+    setFilteredEmployees(newFiltered);
+  }, [currentTab, employees, employeeShifts]);
+
+  // GET SHIFT DETAILS
+  const getShiftById = (shiftId) => {
+    if (!shiftId || !selectedShiftsForDate.length) return null;
+    return selectedShiftsForDate.find(s => s.shift_id === Number(shiftId)) || null;
+  };
+
+  // GET CUSTOM SHIFT TIMES FROM PLANNING
+  const getCustomShiftTimes = async (empNum, shiftId) => {
+    try {
+      const planningData = await planningApi.getPlanning(currentDate);
+      const assignment = planningData.find(
+        p => p.emp_id === empNum && p.shift_id === shiftId
       );
 
-      setEmployees(employeesWithShifts);
-      localStorage.setItem(cacheKey, JSON.stringify(employeesWithShifts));
-      setError(null);
-
+      if (assignment && (assignment.custom_start_time || assignment.custom_end_time)) {
+        return {
+          start_time: assignment.custom_start_time || null,
+          end_time: assignment.custom_end_time || null
+        };
+      }
+      return null;
     } catch (err) {
-      console.error('Error fetching employees:', err);
-      setError('Failed to load employees');
-      setEmployees([]);
-    } finally {
-      setLoading(false);
+      console.error("Error getting custom shift times:", err);
+      return null;
     }
   };
 
-  fetchEmployees();
-}, [currentDate]);
+  // GET CURRENT TIME
+  const getCurrentTime = () => {
+    const now = new Date();
+    const hours = now.getHours().toString().padStart(2, '0');
+    const minutes = now.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
 
-// ... (rest of the component remains unchanged)
+  // CALCULATE LATE MINUTES
+  const calculateLateMinutes = (clockIn, shiftStart) => {
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
 
-  // FETCH PLANNED SHIFTS
-  const fetchAllPlannedShifts = async (employeesList) => {
-    const today = currentDate || new Date().toISOString().split('T')[0];
-    const updated = await Promise.all(
-      employeesList.map(async (emp) => {
-        try {
-          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${today}`);
-          if (!res.ok) throw new Error("No planned shift");
-          const data = await res.json();
-          return {
-            ...emp,
-            shift: data.shift_id,
-            shiftStart: data.start_time,
-            shiftEnd: data.end_time,
-          };
-        } catch {
-          return emp;
-        }
-      })
-    );
-    setEmployees(updated);
-  };
+    const clockInM = toMinutes(clockIn);
+    let shiftStartM = toMinutes(shiftStart);
 
-  // ADD NEW EMPLOYEE
-  const addNewEmployee = async () => {
-    const name = prompt("Enter new employee name:");
-    if (!name) return;
-    try {
-      const newEmployee = await employeesApi.addEmployee({ name });
-      setEmployees(prev => [
-        ...prev,
-        {
-          num: newEmployee.id,
-          name: name,
-          clockIn: "00:00",
-          clockOut: "00:00",
-          shift: 0,
-          delay: "00:00",
-          overtime: "00:00",
-          hours: "00:00"
-        }
-      ]);
-      alert(`Employee "${name}" added successfully!`);
-    } catch (err) {
-      alert('Error adding employee: ' + err.message);
-    }
-  };
+    if (clockInM < shiftStartM) shiftStartM -= 24 * 60;
 
-  // DELETE EMPLOYEE
-  const handleEmployeeDeleted = async (employeeId) => {
-    try {
-      await employeesApi.deleteEmployee(employeeId);
-      setEmployees(prev => prev.filter(emp => emp.num !== employeeId));
-      alert("Employee deleted successfully!");
-    } catch (err) {
-      alert('Error deleting employee: ' + err.message);
-    }
-  };
+    const late = clockInM - shiftStartM;
+    return late > 0 ? late : 0;
+  };
 
-  // CLOCK IN
-  const handleClockIn = () => {
-    const now = new Date().toISOString();
-    localStorage.setItem("clockInTime", now);
-    alert(`Clocked in at ${new Date(now).toLocaleTimeString()}`);
-  };
+  // CALCULATE OVERTIME MINUTES
+  const calculateOvertimeMinutes = (clockOut, shiftEnd) => {
+    const toMinutes = (time) => {
+      const [h, m] = time.split(":").map(Number);
+      return h * 60 + m;
+    };
 
-  // CLOCK OUT
-  const handleClockOut = () => {
-    const clockInTime = localStorage.getItem("clockInTime");
-    if (!clockInTime) {
-      alert("You must clock in first!");
-      return;
-    }
+    let clockOutM = toMinutes(clockOut);
+    let shiftEndM = toMinutes(shiftEnd);
 
-    const clockOutTime = new Date().toISOString();
-    const employeeId = prompt("Enter your Employee ID:");
-    if (!employeeId) return alert("Employee ID is required");
+    if (shiftEndM === 0) shiftEndM = 24 * 60;
 
-    const clockInHHMM = clockInTime.split('T')[1].substring(0, 5);
-    const clockOutHHMM = clockOutTime.split('T')[1].substring(0, 5);
+    if (shiftEndM === 24 * 60 && clockOutM < 12 * 60) {
+      clockOutM += 24 * 60;
+    }
 
-    const { workHours, lateMinutes, overtimeMinutes } = calculateWorkTime(
-      "08:00",
-      "16:00",
-      clockInHHMM,
-      clockOutHHMM
-    );
+    const overtime = clockOutM - shiftEndM;
+    return overtime > 0 ? overtime : 0;
+  };
 
-    worktimeApi.saveWorkTime({
-      employeeId: parseInt(employeeId),
-      date: currentDate,
-      timeOfWork: workHours.toString(),
-      delay: lateMinutes.toString(),
-      overtime: overtimeMinutes.toString(),
-      shift: 1,
-  absent: false,
-  absentComment: ""
-    })
-      .then(() => {
-        alert("✅ Worktime recorded successfully!");
-        localStorage.removeItem("clockInTime");
-      })
-      .catch(err => {
-        console.error('Worktime save error:', err);
-        alert("❌ Error saving work time to database");
-      });
-  };
+  // FORMAT MINUTES TO TIME
+  const formatMinutesToTime = (totalMinutes) => {
+    if (totalMinutes <= 0) return "00:00";
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
 
-  // SAVE ALL
-  const saveAll = () => {
-    alert('Save functionality would go here');
-  };
+  // CALCULATE HOURS
+  const calculateHours = (clockIn, clockOut) => {
+    if (clockIn === "00:00" || clockOut === "00:00") {
+      return "00:00";
+    }
 
-  if (loading) return <div>Loading employees...</div>;
-  if (error) return <div>Error: {error}</div>;
+    const [inHours, inMinutes] = clockIn.split(':').map(Number);
+    const [outHours, outMinutes] = clockOut.split(':').map(Number);
 
+    const totalInMinutes = inHours * 60 + inMinutes;
+    const totalOutMinutes = outHours * 60 + outMinutes;
 
-  return (
-    <>
-      <Header />
-      <TextField label="Date" value={currentDate} readOnly />
-      <Content
-        employees={employees}
-        selectedShifts={selectedShifts}       // ✅ pass the state
-        setSelectedShifts={setSelectedShifts} // ✅ pass the setter
-        onEmployeeDeleted={handleEmployeeDeleted} />
+    let diffMinutes = totalOutMinutes - totalInMinutes;
 
-    </>
-  );
+    if (diffMinutes < 0) {
+      diffMinutes += 24 * 60;
+    }
 
+    const hours = Math.floor(diffMinutes / 60);
+    const minutes = diffMinutes % 60;
+
+    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+  };
+
+  // CLOCK IN HANDLER - NO ALERT, INSTANT COLOR CHANGE
+  const handleClockIn = async (emp) => {
+    try {
+      const clockInTime = getCurrentTime();
+      const shiftDetails = getShiftById(currentTab);
+
+      if (!shiftDetails) {
+        return;
+      }
+
+      // Update local state IMMEDIATELY to show button color change
+      const key = `${emp.num}-${currentTab}`;
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          clockIn: clockInTime
+        }
+      }));
+
+      const customTimes = await getCustomShiftTimes(emp.num, shiftDetails.shift_id);
+      const effectiveStartTime = customTimes?.start_time || shiftDetails.start_time;
+
+      const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
+
+      const workTimeData = {
+        employeeId: emp.num,
+        date: currentDate,
+        clockIn: clockInTime,
+        clockOut: "00:00",
+        timeOfWork: "00:00",
+        shift: shiftDetails.shift_id,
+        delay: formatMinutesToTime(lateMinutes),
+        overtime: "00:00",
+        late_minutes: lateMinutes,
+        consomation: 0,
+        penalty: 0,
+        absent: 0,
+        absentComment: ""
+      };
+
+      await worktimeApi.saveWorkTime(workTimeData);
+
+      // Save to localStorage using utility function (triggers sync)
+      saveWorktimeToLocalStorage(emp.num, currentDate, shiftDetails.shift_id, clockInTime, "00:00");
+
+      // Clear employee cache
+      clearEmployeeCache(currentDate);
+
+      console.log(`✅ Clock in saved for employee ${emp.num}`);
+
+    } catch (err) {
+      console.error('Clock-in error:', err);
+      // Revert button state on error
+      const key = `${emp.num}-${currentTab}`;
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          clockIn: "00:00"
+        }
+      }));
+    }
+  };
+
+  // CLOCK OUT HANDLER - NO ALERT, INSTANT COLOR CHANGE
+  const handleClockOut = async (emp) => {
+    try {
+      const clockOutTime = getCurrentTime();
+      const shiftDetails = getShiftById(currentTab);
+
+      if (!shiftDetails) {
+        return;
+      }
+
+      const key = `${emp.num}-${currentTab}`;
+
+      // Get the clockIn time from current state
+      const clockInTime = employeeTimes[key]?.clockIn || "00:00";
+
+      if (clockInTime === "00:00") {
+        alert("Please clock in first before clocking out!");
+        return;
+      }
+
+      // Update local state IMMEDIATELY to show button color change
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          clockOut: clockOutTime
+        }
+      }));
+
+      const customTimes = await getCustomShiftTimes(emp.num, shiftDetails.shift_id);
+      const effectiveEndTime = customTimes?.end_time || shiftDetails.end_time;
+
+      const timeOfWork = calculateHours(clockInTime, clockOutTime);
+      const overtimeMinutes = calculateOvertimeMinutes(clockOutTime, effectiveEndTime);
+      const effectiveStartTime = customTimes?.start_time || shiftDetails.start_time;
+      const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
+
+      const workTimeData = {
+        employeeId: emp.num,
+        date: currentDate,
+        clockIn: clockInTime,
+        clockOut: clockOutTime,
+        timeOfWork: timeOfWork,
+        shift: shiftDetails.shift_id,
+        delay: formatMinutesToTime(lateMinutes),
+        overtime: formatMinutesToTime(overtimeMinutes),
+        late_minutes: lateMinutes,
+        consomation: 0,
+        penalty: 0,
+        absent: 0,
+        absentComment: ""
+      };
+
+      await worktimeApi.saveWorkTime(workTimeData);
+
+      // Save to localStorage using utility function (triggers sync)
+      saveWorktimeToLocalStorage(emp.num, currentDate, shiftDetails.shift_id, clockInTime, clockOutTime);
+
+      // Clear employee cache
+      clearEmployeeCache(currentDate);
+
+      console.log(`✅ Clock out saved for employee ${emp.num}`);
+
+    } catch (err) {
+      console.error('Clock-out error:', err);
+      // Revert button state on error
+      const key = `${emp.num}-${currentTab}`;
+      setEmployeeTimes(prev => ({
+        ...prev,
+        [key]: {
+          ...prev[key],
+          clockOut: "00:00"
+        }
+      }));
+    }
+  };
+
+  // GET BUTTON STYLE BASED ON CLOCK STATUS
+  const getClockInButtonStyle = (emp) => {
+    const key = `${emp.num}-${currentTab}`;
+    const clockIn = employeeTimes[key]?.clockIn;
+
+    if (clockIn && clockIn !== "00:00") {
+      return {
+        background: '#28a745', // Green when clocked in
+        color: 'white',
+        border: 'none',
+        padding: '20px 20px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '14px',
+        width: '100%'
+      };
+    }
+
+    return {
+      background: '#6c757d', // Gray when not clocked in
+      color: 'white',
+      border: 'none',
+      padding: '20px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      width: '100%'
+    };
+  };
+
+  const getClockOutButtonStyle = (emp) => {
+    const key = `${emp.num}-${currentTab}`;
+    const clockOut = employeeTimes[key]?.clockOut;
+
+    if (clockOut && clockOut !== "00:00") {
+      return {
+        background: '#dc3545', // Red when clocked out
+        color: 'white',
+        border: 'none',
+        padding: '20px 20px',
+        borderRadius: '4px',
+        cursor: 'pointer',
+        fontSize: '14px',
+        width: '100%'
+      };
+    }
+
+    return {
+      background: '#6c757d', // Gray when not clocked out
+      color: 'white',
+      border: 'none',
+      padding: '20px 20px',
+      borderRadius: '4px',
+      cursor: 'pointer',
+      fontSize: '14px',
+      width: '100%'
+    };
+  };
+
+  if (loading) {
+    return (
+      <>
+        <Header />
+        <div>Loading...</div>
+      </>
+    );
+  }
+
+  if (error) {
+    return (
+      <>
+        <Header />
+        <div>Error: {error}</div>
+      </>
+    );
+  }
+
+  if (!currentTab) {
+    return (
+      <>
+        <Header />
+        <div>Waiting for data...</div>
+      </>
+    );
+  }
+
+  return (
+    <>
+      <Header />
+
+      {(!selectedShiftsForDate.length || currentTab === null) ? (
+        <div>Loading shifts...</div>
+      ) : (
+        <>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "flex-start",
+              alignItems: "center",
+              color: "black",
+              fontSize: "20px",
+              marginLeft: "35px",
+              marginTop: "40px",
+              marginBottom: "0px"
+            }}
+          >
+            Today is {formatDateDisplay(currentDate)}
+          </div>
+
+          <div style={{ marginLeft: "35px", marginTop: "20px" }}>
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+              {selectedShiftsForDate.map((shift) => (
+                <button
+                  key={shift.shift_id}
+                  className="newDay"
+                  onClick={() => setCurrentTab(shift.shift_id)}
+                  style={{
+                    backgroundColor: currentTab === shift.shift_id ? "#28a745" : "#6c757d",
+                    color: "white",
+                    cursor: "pointer"
+                  }}
+                >
+                  Shift ({shift.start_time.slice(0, 5)} - {shift.end_time.slice(0, 5)})
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <table border="1" cellPadding="20" cellSpacing="0">
+              <thead>
+                <tr>
+                  <th>Employee</th>
+                  <th>Clock in</th>
+                  <th>Clock out</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredEmployees.length === 0 ? (
+                  <tr>
+                    <td colSpan="3" style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
+                      No employees scheduled for this shift
+                    </td>
+                  </tr>
+                ) : (
+                  filteredEmployees.map((emp) => {
+                    const key = `${emp.num}-${currentTab}`;
+                    const isAbsent = employeeTimes[key]?.absent || false;
+
+                    return (
+                      <tr key={key}>
+                        <td>{emp.FirstName} - {emp.empNumber}</td>
+
+                        <td>
+                          {isAbsent ? (
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '20px',
+                              color: '#6c757d',
+                              fontStyle: 'italic',
+                              background: '#f8f9fa',
+                              borderRadius: '4px'
+                            }}>
+                              Absent
+                            </div>
+                          ) : (
+                            <button
+                              className="time-button"
+                              onClick={() => handleClockIn(emp)}
+                              style={getClockInButtonStyle(emp)}
+                            >
+                              Clock In
+                            </button>
+                          )}
+                        </td>
+
+                        <td>
+                          {isAbsent ? (
+                            <div style={{
+                              textAlign: 'center',
+                              padding: '20px',
+                              color: '#6c757d',
+                              fontStyle: 'italic',
+                              background: '#f8f9fa',
+                              borderRadius: '4px'
+                            }}>
+                              Absent
+                            </div>
+                          ) : (
+                            <button
+                              className="time-button"
+                              onClick={() => handleClockOut(emp)}
+                              style={getClockOutButtonStyle(emp)}
+                            >
+                              Clock Out
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </>
+  );
 }
 
-export default ClockInPage;
-
-
+export default ClockInOutUser;

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import Header from "../Components/Header";
+import Header from "../AuthContext/Header";
 import Profile from "../assets/ProfileImg.jpg";
 import { employeesApi } from "../services/employeesAPI";
 
