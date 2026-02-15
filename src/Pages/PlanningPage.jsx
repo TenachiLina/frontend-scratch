@@ -108,7 +108,7 @@ export default function Planning() {
         { id: 2, name: "Livreur" },
         { id: 3, name: "Agent polyvalent" },
         { id: 4, name: "Prepateur" },
-        { id: 5, name: "Cassier" },
+        { id: 5, name: "Caissier" },
         { id: 6, name: "Serveur" },
         { id: 7, name: "Plongeur" },
         { id: 8, name: "Manageur" },
@@ -831,7 +831,7 @@ export default function Planning() {
             // Notify user about conflicts
             if (conflicts.length > 0) {
                 const confirmMessage = `⚠️ The following dates already have planning:\n\n${conflicts.map(d => formatDateDisplay(d)).join('\n')}\n\nDo you want to REPLACE the existing planning with the template?`;
-                
+
                 if (!window.confirm(confirmMessage)) {
                     setSavingTemplate(false);
                     return;
@@ -901,7 +901,7 @@ export default function Planning() {
         }
 
         const sortedDates = [...dates].sort();
-        
+
         try {
             // Fetch actual saved planning data from database for all selected dates
             const allPlanningData = {};
@@ -956,7 +956,7 @@ export default function Planning() {
                 // Process each assignment
                 planningData.forEach(assignment => {
                     console.log('🔍 RAW Assignment from API:', JSON.stringify(assignment, null, 2));
-                    
+
                     // Find the post name
                     const post = posts.find(p => p.id === assignment.task_id);
                     const postName = post ? post.name : `Task ${assignment.task_id}`;
@@ -964,7 +964,7 @@ export default function Planning() {
                     // Find the shift time
                     const shift = allShifts.find(s => s.shift_id === assignment.shift_id);
                     let timeDisplay = shift ? shift.time : 'N/A';
-                    
+
                     // Use custom times if available
                     if (assignment.custom_start_time && assignment.custom_end_time) {
                         timeDisplay = `${assignment.custom_start_time}-${assignment.custom_end_time}`;
@@ -972,14 +972,14 @@ export default function Planning() {
 
                     // *** FIXED: Get employee full name with detailed logging ***
                     let employeeName = '';
-                    
+
                     console.log('📋 Checking employee fields:');
                     console.log('  - assignment.employee_FirstName:', assignment.employee_FirstName);
                     console.log('  - assignment.employee_LastName:', assignment.employee_LastName);
                     console.log('  - assignment.FirstName:', assignment.FirstName);
                     console.log('  - assignment.LastName:', assignment.LastName);
                     console.log('  - assignment.emp_id:', assignment.emp_id);
-                    
+
                     // PRIORITY 1: Try to find employee in the employees list first (most reliable)
                     const emp = employees.find(e => e.emp_id === assignment.emp_id);
                     if (emp && (emp.FirstName || emp.LastName)) {
@@ -989,10 +989,10 @@ export default function Planning() {
                         // PRIORITY 2: Try to get from assignment fields
                         const firstName = assignment.employee_FirstName || assignment.FirstName || '';
                         const lastName = assignment.employee_LastName || assignment.LastName || '';
-                        
+
                         console.log('  → Extracted firstName:', firstName);
                         console.log('  → Extracted lastName:', lastName);
-                        
+
                         // Construct full name
                         if (firstName && lastName) {
                             employeeName = `${firstName} ${lastName}`;
@@ -1032,7 +1032,7 @@ export default function Planning() {
                 body: rows,
                 startY: 40,
                 styles: { fontSize: 10 },
-                didParseCell: function(data) {
+                didParseCell: function (data) {
                     // Add background color to empty spacing rows
                     if (data.row.index > 0 && data.cell.raw === '') {
                         data.cell.styles.fillColor = [240, 240, 240];
@@ -1041,12 +1041,12 @@ export default function Planning() {
             });
 
             doc.save(`planning_${sortedDates[0]}_to_${sortedDates[sortedDates.length - 1]}.pdf`);
-            
+
             setShowExportCalendar(false);
             setSelectedDates([]);
             setDateRangeStart('');
             setDateRangeEnd('');
-            
+
             const actualRows = rows.filter(r => r[0] !== '');
             alert(`✅ Successfully exported planning for ${actualRows.length} assignments!`);
 
@@ -1074,7 +1074,7 @@ export default function Planning() {
 
             // Clear current template
             setTemplatePlanning({});
-            
+
             // Extract unique shift IDs
             const usedShiftIds = new Set();
 
@@ -1108,12 +1108,12 @@ export default function Planning() {
             setTemplatePlanning(newTemplate);
             setTemplateSelectedShifts(Array.from(usedShiftIds));
             setTemplateTick(t => t + 1);
-            
+
             setShowImportCalendar(false);
             setImportDate('');
-            
+
             alert(`✅ Successfully imported planning from ${formatDateDisplay(importDate)}!`);
-            
+
         } catch (error) {
             console.error('❌ Error importing planning:', error);
             alert('Error importing planning: ' + error.message);
@@ -1146,7 +1146,7 @@ export default function Planning() {
 
         const newDates = [];
         const current = new Date(start);
-        
+
         while (current <= end) {
             const dateStr = current.toISOString().split('T')[0];
             if (!selectedDates.includes(dateStr)) {
@@ -1285,7 +1285,7 @@ export default function Planning() {
         weekDates.forEach((date, i) => {
             const dayName = dayNames[i];
             const dayData = planningDataRefs.current[date] || {};
-            
+
             // Get only the selected shifts for this date
             const selectedShiftIds = selectedShiftsPerDay[date] || [];
             const shiftsForDay = selectedShiftIds.length > 0
@@ -1306,7 +1306,7 @@ export default function Planning() {
 
                         // Get employee full name - use employees list as primary source
                         let employeeName = '';
-                        
+
                         // Try to find in employees list first (most reliable)
                         const empFromList = employees.find(e => e.emp_id === emp.emp_id);
                         if (empFromList && (empFromList.FirstName || empFromList.LastName)) {
@@ -1315,7 +1315,7 @@ export default function Planning() {
                             // Fallback to stored names
                             employeeName = `${emp.employee_FirstName || ''} ${emp.employee_LastName || ''}`.trim();
                         }
-                        
+
                         // Final fallback
                         if (!employeeName) {
                             employeeName = `Employee ${emp.emp_id}`;
@@ -1970,7 +1970,7 @@ export default function Planning() {
                             onClick={() => setShowSaveCalendar(true)}
                             disabled={savingTemplate}
                         >
-                            💾 Save Template to Dates
+                            💾 Save
                         </button>
 
                         <button
@@ -1978,7 +1978,7 @@ export default function Planning() {
                             onClick={() => setShowExportCalendar(true)}
                             style={{ backgroundColor: "#28a745" }}
                         >
-                            📄 Export Template
+                            📄 Export
                         </button>
                     </div>
                 </>
@@ -2030,18 +2030,18 @@ export default function Planning() {
                                         alert("⚠️ Please select both start and end dates!");
                                         return;
                                     }
-                                    
+
                                     const start = new Date(dateRangeStart);
                                     const end = new Date(dateRangeEnd);
-                                    
+
                                     if (start > end) {
                                         alert("⚠️ Start date must be before end date!");
                                         return;
                                     }
-                                    
+
                                     const newDates = [];
                                     const current = new Date(start);
-                                    
+
                                     while (current <= end) {
                                         const dateStr = current.toISOString().split('T')[0];
                                         if (!selectedDates.includes(dateStr)) {
@@ -2049,7 +2049,7 @@ export default function Planning() {
                                         }
                                         current.setDate(current.getDate() + 1);
                                     }
-                                    
+
                                     setSelectedDates([...selectedDates, ...newDates]);
                                     setDateRangeStart('');
                                     setDateRangeEnd('');
@@ -2133,7 +2133,7 @@ export default function Planning() {
                                         alert("⚠️ Please select at least one date!");
                                         return;
                                     }
-                                    
+
                                     applyTemplateToSelectedDates(selectedDates);
                                 }}
                                 disabled={savingTemplate || selectedDates.length === 0}
@@ -2192,18 +2192,18 @@ export default function Planning() {
                                         alert("⚠️ Please select both start and end dates!");
                                         return;
                                     }
-                                    
+
                                     const start = new Date(dateRangeStart);
                                     const end = new Date(dateRangeEnd);
-                                    
+
                                     if (start > end) {
                                         alert("⚠️ Start date must be before end date!");
                                         return;
                                     }
-                                    
+
                                     const newDates = [];
                                     const current = new Date(start);
-                                    
+
                                     while (current <= end) {
                                         const dateStr = current.toISOString().split('T')[0];
                                         if (!selectedDates.includes(dateStr)) {
@@ -2211,7 +2211,7 @@ export default function Planning() {
                                         }
                                         current.setDate(current.getDate() + 1);
                                     }
-                                    
+
                                     setSelectedDates([...selectedDates, ...newDates]);
                                     setDateRangeStart('');
                                     setDateRangeEnd('');
@@ -2295,7 +2295,7 @@ export default function Planning() {
                                         alert("⚠️ Please select at least one date!");
                                         return;
                                     }
-                                    
+
                                     exportTemplateForSelectedDates(selectedDates);
                                 }}
                                 disabled={selectedDates.length === 0}
@@ -2320,16 +2320,16 @@ export default function Planning() {
                             <p style={{ textAlign: "center", color: "#6c757d", marginBottom: "20px" }}>
                                 Select a date to import its planning into the template
                             </p>
-                            
+
                             <div style={{ display: "flex", flexDirection: "column", gap: "15px" }}>
                                 <input
                                     type="date"
                                     value={importDate}
                                     onChange={(e) => setImportDate(e.target.value)}
-                                    style={{ 
-                                        padding: "12px", 
+                                    style={{
+                                        padding: "12px",
                                         fontSize: "16px",
-                                        borderRadius: "8px", 
+                                        borderRadius: "8px",
                                         border: "2px solid #007bff",
                                         textAlign: "center"
                                     }}
@@ -2380,7 +2380,7 @@ export default function Planning() {
                                     borderRadius: "8px",
                                     textAlign: "center"
                                 }}>
-                                    <strong>Selected Date:</strong><br/>
+                                    <strong>Selected Date:</strong><br />
                                     {formatDateDisplay(importDate)}
                                 </div>
                             )}
