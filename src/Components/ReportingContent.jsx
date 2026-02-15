@@ -10,8 +10,12 @@ export default function ReportingContent({
     onSavedComment,
     isGlobalView = false,
 }) {
-    console.log("Employee list passed to component:", employeeList);
-    console.log("Is Global View:", isGlobalView);
+    // console.log("rows",rows);
+    // console.log("summary: ",summary);
+    // console.log("employeeId: ",employeeId);
+    // console.log("start is:",startEnd.start);  
+    // console.log("End is:",startEnd.end);
+    // console.log("isGlobale view",isGlobalView);
 
     const [localRows, setLocalRows] = useState([]);
     const [advanceGiven, setAdvanceGiven] = useState(false);
@@ -79,6 +83,26 @@ export default function ReportingContent({
             return;
         }
 
+        // const isDayView = startEnd.start === startEnd.end;
+        // if (isDayView) {
+        //     // Pour day view, utilisez directement les rows sans remplissage
+        //     setLocalRows(rows.map(r => ({
+        //         ...r,
+        //         work_date: r.work_date ? r.work_date.toString().split("T")[0] : "",
+        //         work_hours: r.work_hours || null,
+        //         late_minutes: r.late_minutes || 0,
+        //         overtime_minutes: r.overtime_minutes || 0,
+        //         penalty: r.penalty || 0,
+        //         consommation: r.consommation || 0,
+        //         salary: Number(r.salary || 0),
+        //         advance_taken: r.advance_taken || false,
+        //         absent: r.absent || 0,
+        //         absent_comment: r.absent_comment || "",
+        //         is_empty: false,
+        //     })));
+        //     return;
+        // }
+
         const generateDates = (start, end) => {
             const dates = [];
             let current = new Date(start);
@@ -100,7 +124,7 @@ export default function ReportingContent({
                 const rowDate = r.work_date ? r.work_date.toString().split("T")[0] : "";
                 return rowDate === d;
             });
-
+            // console.log("🌤️🌤️🌤️ rowdate for date", d, ":", existing);
             return existing
                 ? {
                     ...existing,
@@ -130,33 +154,48 @@ export default function ReportingContent({
                     is_empty: true,
                 };
         });
+        // console.log("📊 Final filledRows:", filledRows);
 
         setLocalRows(filledRows);
     }, [rows, startEnd, isGlobalView]);
 
     /* ================= HELPER: CONVERT TIME TO DECIMAL HOURS ================= */
     const timeToDecimalHours = (timeStr) => {
-        if (!timeStr || timeStr === "00:00" || timeStr === "") return 0;
+        if (!timeStr || timeStr === "00:00" || timeStr === "00:00:00" || timeStr === "") return 0;
         if (typeof timeStr === 'number') return timeStr;
 
         const str = String(timeStr).trim();
 
+        // If it's already a decimal number
         if (!str.includes(':')) {
             const num = parseFloat(str);
             return isNaN(num) ? 0 : num;
         }
 
+        // Handle HH:MM:SS format (from database)
         const parts = str.split(':');
-        if (parts.length !== 2) return 0;
 
-        const hours = parseInt(parts[0], 10);
-        const minutes = parseInt(parts[1], 10);
+        if (parts.length === 3) {
+            // HH:MM:SS format
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            const seconds = parseInt(parts[2], 10);
 
-        if (isNaN(hours) || isNaN(minutes)) return 0;
+            if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return 0;
 
-        return hours + (minutes / 60);
+            return hours + (minutes / 60) + (seconds / 3600);
+        } else if (parts.length === 2) {
+            // HH:MM format
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+
+            if (isNaN(hours) || isNaN(minutes)) return 0;
+
+            return hours + (minutes / 60);
+        }
+
+        return 0;
     };
-
     /* ================= CALCULATE SALARY FOR DAY ================= */
     const salaryForDay = (row) => {
         const empIdRow = Number(row.emp_id);
@@ -789,6 +828,10 @@ export default function ReportingContent({
                 ) : isDayView ? (
                     /* ================= DAY VIEW ================= */
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                        {/* ✅ AJOUTEZ CE DEBUG */}
+                        {console.log("📅 DAY VIEW - localRows:", localRows)}
+                        {console.log("📅 DAY VIEW - employeeId:", employeeId)}
+                        {console.log("📅 DAY VIEW - employeeList:", employeeList)}
                         {localRows.map((r, idx) => {
                             const { salary } = salaryForDay(r);
                             return (
@@ -808,6 +851,7 @@ export default function ReportingContent({
                                         <div><strong>Late Minutes:</strong> {r.late_minutes} min</div>
                                         <div><strong>Overtime Minutes:</strong> {r.overtime_minutes} min</div>
                                         <div><strong>Penalty:</strong> {r.penalty} DA</div>
+                                        <div><strong>Consomation:</strong> {r.consommation} DA</div>
                                         <div><strong>Absent:</strong> {r.absent ? 'Yes' : 'No'}</div>
                                         {r.absent_comment && <div><strong>Comment:</strong> {r.absent_comment}</div>}
                                     </div>
