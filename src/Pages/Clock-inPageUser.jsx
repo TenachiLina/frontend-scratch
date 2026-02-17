@@ -689,7 +689,7 @@ function ClockInOutUser() {
     return (
       <>
         <Header />
-        <div>Waiting for data...</div>
+        <div>There is no planning yet...</div>
       </>
     );
   }
