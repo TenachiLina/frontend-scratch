@@ -458,7 +458,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   };
 
   if (!currentTab) { 
-    return <div>Waiting for data...</div>; 
+    return <div>There is no planning yet</div>; 
   }
 
   return (
