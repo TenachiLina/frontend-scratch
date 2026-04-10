@@ -16,7 +16,7 @@ import Emp_Management from "./Pages/Emp_Management";
 function App() {
   return (
     <AuthProvider>
-      <Router>
+      <Router basename="/frontend-scratch">
         <Routes>
           {/* PUBLIC ROUTES - User View */}
           <Route path="/" element={<Home />} />
