@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react"; 
+import { useState, useEffect } from "react";
 import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js";
 import { planningApi } from "../services/planningAPI";
 import { API_BASE_URL } from "../services/config";
-import { 
-  saveWorktimeToLocalStorage, 
-  clearEmployeeCache 
+import {
+  saveWorktimeToLocalStorage,
+  clearEmployeeCache
 } from "../services/worktimeSync";
 
 export default function Content({ employees, selectedShifts, selectedShiftsForDate, setSelectedShifts, onEmployeeDeleted, currentDate }) {
@@ -67,12 +67,12 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
         if (!shiftId) return;
 
         const key = `${emp.num}-${shiftId}`;
-        
+
         // Merge: clockIn/clockOut/absent from props, other fields from previous state or localStorage
         // If we have a recent local change (within 2 seconds), keep it instead of overwriting
         const existingTime = prev[key];
         const timeSinceUpdate = existingTime?._lastUpdate ? (Date.now() - existingTime._lastUpdate) : Infinity;
-        
+
         updatedTimes[key] = {
           clockIn: (timeSinceUpdate < 2000 ? existingTime?.clockIn : emp.clockIn) || "00:00",
           clockOut: (timeSinceUpdate < 2000 ? existingTime?.clockOut : emp.clockOut) || "00:00",
@@ -121,7 +121,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
 
       try {
         const planningData = await planningApi.getPlanning(currentDate);
-        
+
         const customTimes = {};
         planningData.forEach(assignment => {
           if (assignment.custom_start_time || assignment.custom_end_time) {
@@ -211,8 +211,29 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       [key]: updatedTimes
     }));
 
-    if (updatedTimes.clockIn && updatedTimes.clockOut && 
-        updatedTimes.clockIn !== "00:00" && updatedTimes.clockOut !== "00:00") {
+    // ✅ Update the employee cache so refresh shows correct times
+    const cacheKey = `employees_${currentDate}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        const updated = parsed.map(emp => {
+          if (String(emp.num) === String(employee) && String(emp.shift) === String(currentTab)) {
+            return { ...emp, [type]: value };
+          }
+          return emp;
+        });
+        localStorage.setItem(cacheKey, JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to update cache:', e);
+      }
+    }
+
+    // ✅ Also update worktimeSync so other tabs get it
+    saveWorktimeToLocalStorage(employee, currentDate, currentTab, updatedTimes.clockIn, updatedTimes.clockOut);
+
+    if (updatedTimes.clockIn && updatedTimes.clockOut &&
+      updatedTimes.clockIn !== "00:00" && updatedTimes.clockOut !== "00:00") {
       saveWorkTimeToDB(employee, updatedTimes.clockIn, updatedTimes.clockOut, updatedTimes.workTimeId || null);
     }
 
@@ -254,7 +275,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
     let shiftEndM = toMinutes(effectiveEndTime);
 
     if (shiftEndM === 0) shiftEndM = 24 * 60;
-    
+
     if (shiftEndM === 24 * 60 && clockOutM < 12 * 60) {
       clockOutM += 24 * 60;
     }
@@ -313,12 +334,14 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       const lateMinutes = calculateLateMinutes(clockIn, employeeNum, shiftNumber);
       const overtimeMinutes = calculateOvertimeMinutes(clockOut, employeeNum, shiftNumber);
       const timeOfWork = calculateHours(clockIn, clockOut);
-      
+
       const key = getEmployeeShiftKey(employeeNum, currentTab);
 
       const workTimeData = {
         employeeId: employeeNum,
         date: currentDate,
+        clockIn: clockIn,
+        clockOut: clockOut,
         timeOfWork: timeOfWork,
         shift: shiftNumber || 0,
         delay: formatMinutesToTime(lateMinutes),
@@ -334,11 +357,11 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       setEmployeeTimes(prev => ({
         ...prev,
         [key]: {
-          ...prev[key], 
+          ...prev[key],
           workTimeId: savedWorkTime.id
         }
       }));
-      
+
       console.log('Work time saved successfully:', savedWorkTime);
       return savedWorkTime;
     } catch (error) {
@@ -350,7 +373,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   const handleClockIn = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
-    
+
     const updatedTimes = {
       ...employeeTimes[key],
       clockIn: currentTime,
@@ -376,7 +399,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   const handleClockOut = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
-    
+
     const updatedTimes = {
       ...employeeTimes[key],
       clockOut: currentTime,
@@ -457,16 +480,16 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
     return formatMinutesToTime(overtimeMinutes);
   };
 
-  if (!currentTab) { 
-    return <div>There is no planning yet</div>; 
+  if (!currentTab) {
+    return <div>There is no planning yet</div>;
   }
 
   return (
     <>
       {(!shifts.length || currentTab === null) ? (
         <div>Loading shifts...</div>
-      ) : ( 
-        <>  
+      ) : (
+        <>
           <div
             style={{
               display: "flex",
@@ -535,15 +558,15 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                     const currentClockOut = getEmployeeTime(emp.num, 'clockOut', currentTab);
                     const currentDelay = getDisplayDelay(emp.num);
                     const currentOvertime = getDisplayOvertime(emp.num);
-                    
+
                     const effectiveStartTime = getEffectiveShiftTime(emp.num, currentTab, 'custom_start_time');
                     const effectiveEndTime = getEffectiveShiftTime(emp.num, currentTab, 'custom_end_time');
                     const customStart = getCustomShiftTime(emp.num, currentTab, 'custom_start_time');
                     const customEnd = getCustomShiftTime(emp.num, currentTab, 'custom_end_time');
                     const hasCustomTime = customStart || customEnd;
-                    
+
                     return (
-                      <tr 
+                      <tr
                         key={`${emp.num}-${currentTab}`}
                         style={{
                           backgroundColor: employeeTimes[key]?.absent ? '#f8f9fa' : 'transparent',
@@ -554,9 +577,9 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                         <td>
                           <div>{emp.FirstName} - {emp.empNumber}</div>
                           {hasCustomTime && (
-                            <div style={{ 
-                              fontSize: '11px', 
-                              color: '#EB4219', 
+                            <div style={{
+                              fontSize: '11px',
+                              color: '#EB4219',
                               fontStyle: 'italic',
                               marginTop: '4px',
                               fontWeight: 'bold'
@@ -683,13 +706,13 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                             style={{ width: "80px" }}
                           />
                         </td>
-                         
+
                         <td>{currentDelay}</td>
                         <td>{currentOvertime}</td>
                         <td>{calculateHours(currentClockIn, currentClockOut)}</td>
-                        
+
                         <td>
-                          <input 
+                          <input
                             type="checkbox"
                             checked={employeeTimes[key]?.absent || false}
                             onChange={(e) => {
@@ -704,13 +727,13 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                                   _lastUpdate: Date.now()
                                 }
                               }));
-                              
+
                               // Save absent status to worktimeSync
                               const currentTimes = employeeTimes[key] || {};
                               saveWorktimeToLocalStorage(
-                                emp.num, 
-                                currentDate, 
-                                currentTab, 
+                                emp.num,
+                                currentDate,
+                                currentTab,
                                 isAbsent ? "00:00" : currentTimes.clockIn || "00:00",
                                 isAbsent ? "00:00" : currentTimes.clockOut || "00:00",
                                 isAbsent,
@@ -738,7 +761,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                             onBlur={(e) => {
                               if (employeeTimes[key]?.absent && e.target.value.trim()) {
                                 saveWorkTimeToDB(emp.num, "00:00", "00:00");
-                                
+
                                 // Update worktimeSync with comment
                                 saveWorktimeToLocalStorage(
                                   emp.num,
@@ -761,7 +784,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
               </tbody>
             </table>
           </div>
-          
+
           {manualInput.employee && (
             <div
               style={{

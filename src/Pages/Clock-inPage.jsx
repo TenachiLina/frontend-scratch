@@ -43,7 +43,7 @@ const getTodayDate = () => {
 
 function ClockInPage() {
   const navigate = useNavigate();
-  
+
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -64,11 +64,11 @@ function ClockInPage() {
       if (cached) {
         try {
           const parsedCache = JSON.parse(cached);
-          
+
           // IMPORTANT: Merge with latest localStorage worktime data
           const localStorageTimes = loadAllWorktimeForDate(currentDate);
           console.log('🔄 Manager view: Loading localStorage times', localStorageTimes);
-          
+
           const mergedEmployees = parsedCache.map(emp => {
             const key = `${emp.num}-${emp.shift}`;
             if (localStorageTimes[key]) {
@@ -82,7 +82,7 @@ function ClockInPage() {
             }
             return emp;
           });
-          
+
           setEmployees(mergedEmployees);
           setLoading(false);
           return;
@@ -121,24 +121,26 @@ function ClockInPage() {
             }
           })
         );
+        // Load from DB (source of truth)
+        let dbWorktimes = [];
+        try {
+          dbWorktimes = await worktimeApi.getWorkTimesByDate(currentDate);
+        } catch (e) {
+          dbWorktimes = []; // no records yet, that's fine
+        }
 
-        // Load worktime from localStorage FIRST (for sync)
-        const localStorageTimes = loadAllWorktimeForDate(currentDate);
-        console.log('📦 Manager view: Loaded from localStorage', localStorageTimes);
-
-        // Merge localStorage times with employee data
         const employeesWithWorktime = employeesWithShifts.map(emp => {
-          const key = `${emp.num}-${emp.shift}`;
-          if (localStorageTimes[key]) {
-            return {
-              ...emp,
-              clockIn: localStorageTimes[key].clockIn,
-              clockOut: localStorageTimes[key].clockOut,
-              absent: localStorageTimes[key].absent || false,
-              absentComment: localStorageTimes[key].absentComment || ""
-            };
-          }
-          return emp;
+          const dbRecord = dbWorktimes.find(
+            r => String(r.emp_id) === String(emp.num) &&
+              String(r.shift_id) === String(emp.shift)
+          );
+          return {
+            ...emp,
+            clockIn: dbRecord?.clock_in?.slice(0, 5) || "00:00",
+            clockOut: dbRecord?.clock_out?.slice(0, 5) || "00:00",
+            absent: dbRecord?.absent == 1 || false,
+            absentComment: dbRecord?.absent_comment || ""
+          };
         });
 
         setEmployees(employeesWithWorktime);
@@ -248,7 +250,7 @@ function ClockInPage() {
 
       try {
         const planningData = await planningApi.getPlanning(currentDate);
-        
+
         // Extract unique shift IDs from planning
         const usedShiftIds = new Set();
         planningData.forEach(assignment => {
@@ -259,7 +261,7 @@ function ClockInPage() {
 
         // Fetch all shifts to get their details
         const allShifts = await shiftApi.getShifts();
-        
+
         // Filter and sort shifts that are used in planning
         const shiftsForDate = allShifts
           .filter(shift => usedShiftIds.has(shift.shift_id))
@@ -290,11 +292,11 @@ function ClockInPage() {
         const updatedShifts = await employees.reduce(async (accPromise, emp) => {
           const acc = await accPromise;
 
-          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`); 
+          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`);
           if (!res.ok) return acc;
-          
-          const data = await res.json(); 
-          
+
+          const data = await res.json();
+
           const shiftIds = data
             .map(shift => shift.shift_id ? shift.shift_id.toString() : null)
             .filter(id => id !== null);
@@ -304,7 +306,7 @@ function ClockInPage() {
           return acc;
         }, Promise.resolve({}));
 
-        setSelectedShifts(updatedShifts); 
+        setSelectedShifts(updatedShifts);
       } catch (err) {
         console.error("Error fetching shifts:", err);
         setSelectedShifts({});
@@ -336,7 +338,7 @@ function ClockInPage() {
         }
       ]);
       alert(`Employee "${name}" added successfully!`);
-      
+
       // Clear cache when new employee is added
       const cacheKey = `employees_${currentDate}`;
       localStorage.removeItem(cacheKey);
@@ -351,7 +353,7 @@ function ClockInPage() {
       await employeesApi.deleteEmployee(employeeId);
       setEmployees(prev => prev.filter(emp => emp.num !== employeeId));
       alert("Employee deleted successfully!");
-      
+
       // Clear cache when employee is deleted
       const cacheKey = `employees_${currentDate}`;
       localStorage.removeItem(cacheKey);
@@ -429,10 +431,10 @@ function ClockInPage() {
         selectedShiftsForDate={selectedShiftsForDate}
         setSelectedShifts={setSelectedShifts}
         onEmployeeDeleted={handleEmployeeDeleted}
-        currentDate={currentDate} 
+        currentDate={currentDate}
       />
     </>
   );
-} 
+}
 
 export default ClockInPage;
