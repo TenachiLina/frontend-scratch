@@ -161,27 +161,41 @@ export default function ReportingContent({
 
     /* ================= HELPER: CONVERT TIME TO DECIMAL HOURS ================= */
     const timeToDecimalHours = (timeStr) => {
-        if (!timeStr || timeStr === "00:00" || timeStr === "") return 0;
+        if (!timeStr || timeStr === "00:00" || timeStr === "00:00:00" || timeStr === "") return 0;
         if (typeof timeStr === 'number') return timeStr;
 
         const str = String(timeStr).trim();
 
+        // If it's already a decimal number
         if (!str.includes(':')) {
             const num = parseFloat(str);
             return isNaN(num) ? 0 : num;
         }
 
+        // Handle HH:MM:SS format (from database)
         const parts = str.split(':');
-        if (parts.length !== 2) return 0;
 
-        const hours = parseInt(parts[0], 10);
-        const minutes = parseInt(parts[1], 10);
+        if (parts.length === 3) {
+            // HH:MM:SS format
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+            const seconds = parseInt(parts[2], 10);
 
-        if (isNaN(hours) || isNaN(minutes)) return 0;
+            if (isNaN(hours) || isNaN(minutes) || isNaN(seconds)) return 0;
 
-        return hours + (minutes / 60);
+            return hours + (minutes / 60) + (seconds / 3600);
+        } else if (parts.length === 2) {
+            // HH:MM format
+            const hours = parseInt(parts[0], 10);
+            const minutes = parseInt(parts[1], 10);
+
+            if (isNaN(hours) || isNaN(minutes)) return 0;
+
+            return hours + (minutes / 60);
+        }
+
+        return 0;
     };
-
     /* ================= CALCULATE SALARY FOR DAY ================= */
     const salaryForDay = (row) => {
         const empIdRow = Number(row.emp_id);
@@ -814,7 +828,7 @@ export default function ReportingContent({
                 ) : isDayView ? (
                     /* ================= DAY VIEW ================= */
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                         {/* ✅ AJOUTEZ CE DEBUG */}
+                        {/* ✅ AJOUTEZ CE DEBUG */}
                         {console.log("📅 DAY VIEW - localRows:", localRows)}
                         {console.log("📅 DAY VIEW - employeeId:", employeeId)}
                         {console.log("📅 DAY VIEW - employeeList:", employeeList)}

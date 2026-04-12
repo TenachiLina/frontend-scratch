@@ -445,15 +445,21 @@ function ClockInOutUser() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
-  // CLOCK IN HANDLER - NO ALERT, INSTANT COLOR CHANGE
+  // CLOCK IN HANDLER - FIXED
   const handleClockIn = async (emp) => {
     try {
+      console.log('🕐 Starting clock-in for:', emp.FirstName);
+      
       const clockInTime = getCurrentTime();
       const shiftDetails = getShiftById(currentTab);
 
       if (!shiftDetails) {
+        console.error('❌ No shift details found for tab:', currentTab);
+        alert('Shift details not found. Please refresh the page.');
         return;
       }
+
+      console.log('📋 Shift details:', shiftDetails);
 
       // Update local state IMMEDIATELY to show button color change
       const key = `${emp.num}-${currentTab}`;
@@ -470,23 +476,23 @@ function ClockInOutUser() {
 
       const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
 
+      // ✅ FIXED: Send only what backend expects (no clockIn/clockOut)
       const workTimeData = {
         employeeId: emp.num,
         date: currentDate,
-        clockIn: clockInTime,
-        clockOut: "00:00",
         timeOfWork: "00:00",
         shift: shiftDetails.shift_id,
         delay: formatMinutesToTime(lateMinutes),
         overtime: "00:00",
-        late_minutes: lateMinutes,
         consomation: 0,
         penalty: 0,
         absent: 0,
         absentComment: ""
       };
 
+      console.log('📤 Sending worktime data:', workTimeData);
       await worktimeApi.saveWorkTime(workTimeData);
+      console.log('✅ API Response: Success');
 
       // Save to localStorage using utility function (triggers sync)
       saveWorktimeToLocalStorage(emp.num, currentDate, shiftDetails.shift_id, clockInTime, "00:00");
@@ -497,7 +503,9 @@ function ClockInOutUser() {
       console.log(`✅ Clock in saved for employee ${emp.num}`);
 
     } catch (err) {
-      console.error('Clock-in error:', err);
+      console.error('❌ Clock-in error:', err);
+      alert(`Clock-in failed: ${err.message}`);
+      
       // Revert button state on error
       const key = `${emp.num}-${currentTab}`;
       setEmployeeTimes(prev => ({
@@ -510,13 +518,17 @@ function ClockInOutUser() {
     }
   };
 
-  // CLOCK OUT HANDLER - NO ALERT, INSTANT COLOR CHANGE
+  // CLOCK OUT HANDLER - FIXED
   const handleClockOut = async (emp) => {
     try {
+      console.log('🕐 Starting clock-out for:', emp.FirstName);
+      
       const clockOutTime = getCurrentTime();
       const shiftDetails = getShiftById(currentTab);
 
       if (!shiftDetails) {
+        console.error('❌ No shift details found for tab:', currentTab);
+        alert('Shift details not found. Please refresh the page.');
         return;
       }
 
@@ -529,6 +541,9 @@ function ClockInOutUser() {
         alert("Please clock in first before clocking out!");
         return;
       }
+
+      console.log('📋 Clock in time:', clockInTime);
+      console.log('📋 Clock out time:', clockOutTime);
 
       // Update local state IMMEDIATELY to show button color change
       setEmployeeTimes(prev => ({
@@ -547,23 +562,27 @@ function ClockInOutUser() {
       const effectiveStartTime = customTimes?.start_time || shiftDetails.start_time;
       const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
 
+      console.log('⏱️ Time of work:', timeOfWork);
+      console.log('⏰ Late minutes:', lateMinutes);
+      console.log('⏰ Overtime minutes:', overtimeMinutes);
+
+      // ✅ FIXED: Send only what backend expects (no clockIn/clockOut)
       const workTimeData = {
         employeeId: emp.num,
         date: currentDate,
-        clockIn: clockInTime,
-        clockOut: clockOutTime,
         timeOfWork: timeOfWork,
         shift: shiftDetails.shift_id,
         delay: formatMinutesToTime(lateMinutes),
         overtime: formatMinutesToTime(overtimeMinutes),
-        late_minutes: lateMinutes,
         consomation: 0,
         penalty: 0,
         absent: 0,
         absentComment: ""
       };
 
+      console.log('📤 Sending worktime data:', workTimeData);
       await worktimeApi.saveWorkTime(workTimeData);
+      console.log('✅ API Response: Success');
 
       // Save to localStorage using utility function (triggers sync)
       saveWorktimeToLocalStorage(emp.num, currentDate, shiftDetails.shift_id, clockInTime, clockOutTime);
@@ -574,7 +593,9 @@ function ClockInOutUser() {
       console.log(`✅ Clock out saved for employee ${emp.num}`);
 
     } catch (err) {
-      console.error('Clock-out error:', err);
+      console.error('❌ Clock-out error:', err);
+      alert(`Clock-out failed: ${err.message}`);
+      
       // Revert button state on error
       const key = `${emp.num}-${currentTab}`;
       setEmployeeTimes(prev => ({
@@ -668,7 +689,7 @@ function ClockInOutUser() {
     return (
       <>
         <Header />
-        <div>Waiting for data...</div>
+        <div>There is no planning yet</div>
       </>
     );
   }
