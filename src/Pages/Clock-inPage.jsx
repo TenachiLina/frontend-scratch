@@ -32,32 +32,25 @@ function calculateWorkTime(shiftStart, shiftEnd, clockIn, clockOut) {
   return { workHours, lateMinutes, overtimeMinutes };
 }
 
+// Helper to get today's date as YYYY-MM-DD
+const getTodayDate = () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 function ClockInPage() {
   const navigate = useNavigate();
   
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentDate, setCurrentDate] = useState('');
+  const [currentDate, setCurrentDate] = useState(getTodayDate);
   const [plannedShift, setPlannedShift] = useState(null);
   const [selectedShifts, setSelectedShifts] = useState({});
   const [selectedShiftsForDate, setSelectedShiftsForDate] = useState([]);
-
-  // GET CURRENT DATE (local time)
-  useEffect(() => {
-    const updateDate = () => {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      setCurrentDate(`${yyyy}-${mm}-${dd}`);
-    };
-
-    updateDate(); // set immediately
-    const timer = setInterval(updateDate, 60 * 1000); // update every minute
-
-    return () => clearInterval(timer); // cleanup on unmount
-  }, []);
 
   // FETCH EMPLOYEES WITH CACHING AND WORKTIME DATA
   useEffect(() => {
@@ -199,7 +192,6 @@ function ClockInPage() {
     const handleWorktimeUpdate = (e) => {
       console.log('🎧 MANAGER VIEW: Custom event fired', e.detail);
       console.log('🔥 MANAGER VIEW: Worktime updated, updating state smoothly...');
-      // Just update the clock times, don't reload everything
       const localStorageTimes = loadAllWorktimeForDate(currentDate);
       setEmployees(prev => {
         console.log('🔄 MANAGER VIEW: Updating employees with times', localStorageTimes);
@@ -403,7 +395,33 @@ function ClockInPage() {
   return (
     <>
       <Header />
-      <TextField label="Date" value={currentDate} readOnly />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
+        <label style={{ fontWeight: 500 }}>Date</label>
+        <input
+          type="date"
+          value={currentDate}
+          onChange={e => setCurrentDate(e.target.value)}
+          style={{
+            padding: '4px 8px',
+            borderRadius: 6,
+            border: '1px solid #ccc',
+            fontSize: 14,
+          }}
+        />
+        <button
+          onClick={() => setCurrentDate(getTodayDate())}
+          style={{
+            padding: '4px 12px',
+            borderRadius: 6,
+            border: '1px solid #ccc',
+            cursor: 'pointer',
+            fontSize: 14,
+          }}
+        >
+          Today
+        </button>
+      </div>
 
       <Content
         employees={employees}
