@@ -59,40 +59,23 @@ function ClockInPage() {
     const cacheKey = `employees_${currentDate}`;
 
     const fetchEmployees = async () => {
-      const cached = localStorage.getItem(cacheKey);
 
+      // Step 1 — show cache instantly if available (for speed)
+      const cached = localStorage.getItem(cacheKey);
       if (cached) {
         try {
           const parsedCache = JSON.parse(cached);
-
-          // IMPORTANT: Merge with latest localStorage worktime data
-          const localStorageTimes = loadAllWorktimeForDate(currentDate);
-          console.log('🔄 Manager view: Loading localStorage times', localStorageTimes);
-
-          const mergedEmployees = parsedCache.map(emp => {
-            const key = `${emp.num}-${emp.shift}`;
-            if (localStorageTimes[key]) {
-              return {
-                ...emp,
-                clockIn: localStorageTimes[key].clockIn,
-                clockOut: localStorageTimes[key].clockOut,
-                absent: localStorageTimes[key].absent || false,
-                absentComment: localStorageTimes[key].absentComment || ""
-              };
-            }
-            return emp;
-          });
-
-          setEmployees(mergedEmployees);
+          setEmployees(parsedCache);
           setLoading(false);
-          return;
         } catch (e) {
-          console.error('Cache parse error:', e);
           localStorage.removeItem(cacheKey);
+          setLoading(true);
         }
+      } else {
+        setLoading(true);
       }
 
-      setLoading(true);
+      // Step 2 — always fetch fresh from DB in background
       try {
         const employeesData = await employeesApi.getEmployees();
 
@@ -106,7 +89,7 @@ function ClockInPage() {
           shift: 0,
         }));
 
-        // Fetch shift assignments from planning
+        // Fetch shift assignment for each employee
         const employeesWithShifts = await Promise.all(
           transformedEmployees.map(async emp => {
             try {
@@ -121,19 +104,26 @@ function ClockInPage() {
             }
           })
         );
-        // Load from DB (source of truth)
+
+        // Step 3 — get fresh clock times from DB
         let dbWorktimes = [];
         try {
           dbWorktimes = await worktimeApi.getWorkTimesByDate(currentDate);
+          console.log('✅ DB worktimes raw FIRST RECORD:', dbWorktimes[0]);
         } catch (e) {
-          dbWorktimes = []; // no records yet, that's fine
+          console.log('❌ DB fetch failed:', e);
+          dbWorktimes = [];
         }
 
+        console.log('👥 Employees with shifts:', employeesWithShifts.map(e => ({ num: e.num, shift: e.shift })));
+
+        // Step 4 — merge employees with DB clock times
         const employeesWithWorktime = employeesWithShifts.map(emp => {
           const dbRecord = dbWorktimes.find(
             r => String(r.emp_id) === String(emp.num) &&
               String(r.shift_id) === String(emp.shift)
           );
+          console.log(`Employee ${emp.num} shift ${emp.shift} → dbRecord:`, dbRecord);
           return {
             ...emp,
             clockIn: dbRecord?.clock_in?.slice(0, 5) || "00:00",
@@ -143,6 +133,7 @@ function ClockInPage() {
           };
         });
 
+        // Step 5 — update display and save fresh cache
         setEmployees(employeesWithWorktime);
         localStorage.setItem(cacheKey, JSON.stringify(employeesWithWorktime));
         setError(null);
@@ -156,93 +147,8 @@ function ClockInPage() {
 
     fetchEmployees();
 
-    // Check for updates to employees (additions/deletions)
-    const checkForUpdates = () => {
-      const updateFlag = localStorage.getItem("employees_updated");
-      if (updateFlag) {
-        console.log("🔄 Detected employee changes, refreshing cache...");
-        localStorage.removeItem(cacheKey);
-        localStorage.removeItem("employees_updated");
-        fetchEmployees();
-      }
-    };
-
-    const updateInterval = setInterval(checkForUpdates, 2000);
-
-    // Listen for storage changes (across tabs/windows)
-    const handleStorageChange = (e) => {
-      if (e.key && e.key.startsWith('worktime_') && e.key.includes(currentDate)) {
-        console.log('📦 MANAGER VIEW: Storage changed, updating employees');
-        const localStorageTimes = loadAllWorktimeForDate(currentDate);
-        setEmployees(prev => {
-          return prev.map(emp => {
-            const key = `${emp.num}-${emp.shift}`;
-            if (localStorageTimes[key]) {
-              return {
-                ...emp,
-                clockIn: localStorageTimes[key].clockIn,
-                clockOut: localStorageTimes[key].clockOut
-              };
-            }
-            return emp;
-          });
-        });
-      }
-    };
-
-    // Listen for custom events from same browser (same-tab sync)
-    const handleWorktimeUpdate = (e) => {
-      console.log('🎧 MANAGER VIEW: Custom event fired', e.detail);
-      console.log('🔥 MANAGER VIEW: Worktime updated, updating state smoothly...');
-      const localStorageTimes = loadAllWorktimeForDate(currentDate);
-      setEmployees(prev => {
-        console.log('🔄 MANAGER VIEW: Updating employees with times', localStorageTimes);
-        return prev.map(emp => {
-          const key = `${emp.num}-${emp.shift}`;
-          if (localStorageTimes[key]) {
-            console.log(`   ✅ Updating employee ${emp.num} shift ${emp.shift}`, localStorageTimes[key]);
-            return {
-              ...emp,
-              clockIn: localStorageTimes[key].clockIn,
-              clockOut: localStorageTimes[key].clockOut
-            };
-          }
-          return emp;
-        });
-      });
-    };
-
-    // Listen for simple event too
-    const handleWorktimeChanged = (e) => {
-      console.log('🎧 MANAGER VIEW: Simple worktime-changed event fired');
-      const localStorageTimes = loadAllWorktimeForDate(currentDate);
-      setEmployees(prev => prev.map(emp => {
-        const key = `${emp.num}-${emp.shift}`;
-        if (localStorageTimes[key]) {
-          return {
-            ...emp,
-            clockIn: localStorageTimes[key].clockIn,
-            clockOut: localStorageTimes[key].clockOut
-          };
-        }
-        return emp;
-      }));
-    };
-
-    console.log('👂 MANAGER VIEW: Adding event listeners');
-    window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('worktimeUpdated', handleWorktimeUpdate);
-    window.addEventListener('worktime-changed', handleWorktimeChanged);
-
-    return () => {
-      console.log('🔇 MANAGER VIEW: Removing event listeners');
-      clearInterval(updateInterval);
-      window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('worktimeUpdated', handleWorktimeUpdate);
-      window.removeEventListener('worktime-changed', handleWorktimeChanged);
-    };
+    return () => { };
   }, [currentDate]);
-
   // LOAD SELECTED SHIFTS FOR CURRENT DATE FROM PLANNING
   useEffect(() => {
     const loadSelectedShiftsForDate = async () => {
