@@ -32,108 +32,102 @@ function calculateWorkTime(shiftStart, shiftEnd, clockIn, clockOut) {
   return { workHours, lateMinutes, overtimeMinutes };
 }
 
+// Helper to get today's date as YYYY-MM-DD
+const getTodayDate = () => {
+  const today = new Date();
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, '0');
+  const dd = String(today.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+};
+
 function ClockInPage() {
   const navigate = useNavigate();
   
   const [employees, setEmployees] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [currentDate, setCurrentDate] = useState('');
+  const [currentDate, setCurrentDate] = useState(getTodayDate);
   const [plannedShift, setPlannedShift] = useState(null);
   const [selectedShifts, setSelectedShifts] = useState({});
   const [selectedShiftsForDate, setSelectedShiftsForDate] = useState([]);
 
-  // GET CURRENT DATE (local time)
-  useEffect(() => {
-    const updateDate = () => {
-      const today = new Date();
-      const yyyy = today.getFullYear();
-      const mm = String(today.getMonth() + 1).padStart(2, '0');
-      const dd = String(today.getDate()).padStart(2, '0');
-      setCurrentDate(`${yyyy}-${mm}-${dd}`);
-    };
-
-    updateDate(); // set immediately
-    const timer = setInterval(updateDate, 60 * 1000); // update every minute
-
-    return () => clearInterval(timer); // cleanup on unmount
-  }, []);
-
-  // FETCH EMPLOYEES WITH CACHING AND WORKTIME DATA - FIXED FOR MULTIPLE TASKS
+  // FETCH EMPLOYEES WITH CACHING AND WORKTIME DATA
   useEffect(() => {
     if (!currentDate) return;
 
-    const fetchEmployees = async () => {
-      setLoading(true);
-      try {
-        // Get planning data first
-        const planningData = await planningApi.getPlanning(currentDate);
-        
-        console.log('📋 Planning data:', planningData);
+    const cacheKey = `employees_${currentDate}`;
 
-        if (planningData.length === 0) {
-          setEmployees([]);
+    const fetchEmployees = async () => {
+      const cached = localStorage.getItem(cacheKey);
+
+      if (cached) {
+        try {
+          const parsedCache = JSON.parse(cached);
+          
+          // IMPORTANT: Merge with latest localStorage worktime data
+          const localStorageTimes = loadAllWorktimeForDate(currentDate);
+          console.log('🔄 Manager view: Loading localStorage times', localStorageTimes);
+          
+          const mergedEmployees = parsedCache.map(emp => {
+            const key = `${emp.num}-${emp.shift}`;
+            if (localStorageTimes[key]) {
+              return {
+                ...emp,
+                clockIn: localStorageTimes[key].clockIn,
+                clockOut: localStorageTimes[key].clockOut,
+                absent: localStorageTimes[key].absent || false,
+                absentComment: localStorageTimes[key].absentComment || ""
+              };
+            }
+            return emp;
+          });
+          
+          setEmployees(mergedEmployees);
           setLoading(false);
           return;
+        } catch (e) {
+          console.error('Cache parse error:', e);
+          localStorage.removeItem(cacheKey);
         }
+      }
 
-        // Get all employees
+      setLoading(true);
+      try {
         const employeesData = await employeesApi.getEmployees();
 
-        // Create employee map for quick lookup
-        const employeeMap = {};
-        employeesData.forEach(emp => {
-          employeeMap[emp.emp_id] = {
-            num: emp.emp_id,
-            FirstName: emp.FirstName || emp.name || 'Unknown',
-            LastName: emp.LastName || '',
-            empNumber: emp.emp_number || emp.emp_id,
-          };
-        });
+        const transformedEmployees = employeesData.map(emp => ({
+          num: emp.emp_id,
+          FirstName: emp.FirstName || emp.name || 'Unknown',
+          LastName: emp.LastName || '',
+          empNumber: emp.emp_number || emp.emp_id,
+          clockIn: "00:00",
+          clockOut: "00:00",
+          shift: 0,
+        }));
 
-        // ✅ Group planning by emp_id and shift_id (ignore multiple tasks)
-        // Use Map to deduplicate by emp_id-shift_id combination
-        const uniquePlanningMap = new Map();
-        
-        planningData.forEach(plan => {
-          const key = `${plan.emp_id}-${plan.shift_id}`;
-          
-          // Only add if not already in map, or if this entry has custom times
-          const existing = uniquePlanningMap.get(key);
-          if (!existing) {
-            uniquePlanningMap.set(key, plan);
-          } else if (plan.custom_start_time || plan.custom_end_time) {
-            // Prefer entries with custom times
-            uniquePlanningMap.set(key, plan);
-          }
-        });
-
-        const uniquePlanning = Array.from(uniquePlanningMap.values());
-        console.log('📋 Unique planning entries (grouped by emp+shift):', uniquePlanning);
-
-        // Create one entry per employee per shift
-        const employeeShiftEntries = uniquePlanning.map(plan => {
-          const empData = employeeMap[plan.emp_id];
-          if (!empData) return null;
-
-          return {
-            ...empData,
-            shift: plan.shift_id,
-            clockIn: "00:00",
-            clockOut: "00:00",
-            absent: false,
-            absentComment: ""
-          };
-        }).filter(Boolean);
-
-        console.log('👥 Employee-shift entries created:', employeeShiftEntries);
+        // Fetch shift assignments from planning
+        const employeesWithShifts = await Promise.all(
+          transformedEmployees.map(async emp => {
+            try {
+              const res = await fetch(
+                `${API_BASE_URL}/api/planning/employee-shift/${emp.num}/${currentDate}`
+              );
+              if (!res.ok) return { ...emp, shift: 0 };
+              const data = await res.json();
+              return { ...emp, shift: data.shift_id || 0 };
+            } catch {
+              return { ...emp, shift: 0 };
+            }
+          })
+        );
 
         // Load worktime from localStorage FIRST (for sync)
         const localStorageTimes = loadAllWorktimeForDate(currentDate);
         console.log('📦 Manager view: Loaded from localStorage', localStorageTimes);
 
         // Merge localStorage times with employee data
-        const employeesWithWorktime = employeeShiftEntries.map(emp => {
+        const employeesWithWorktime = employeesWithShifts.map(emp => {
           const key = `${emp.num}-${emp.shift}`;
           if (localStorageTimes[key]) {
             return {
@@ -147,9 +141,8 @@ function ClockInPage() {
           return emp;
         });
 
-        console.log('✅ Final employees array:', employeesWithWorktime);
-
         setEmployees(employeesWithWorktime);
+        localStorage.setItem(cacheKey, JSON.stringify(employeesWithWorktime));
         setError(null);
       } catch (err) {
         console.error('Failed to fetch employees:', err);
@@ -160,6 +153,19 @@ function ClockInPage() {
     };
 
     fetchEmployees();
+
+    // Check for updates to employees (additions/deletions)
+    const checkForUpdates = () => {
+      const updateFlag = localStorage.getItem("employees_updated");
+      if (updateFlag) {
+        console.log("🔄 Detected employee changes, refreshing cache...");
+        localStorage.removeItem(cacheKey);
+        localStorage.removeItem("employees_updated");
+        fetchEmployees();
+      }
+    };
+
+    const updateInterval = setInterval(checkForUpdates, 2000);
 
     // Listen for storage changes (across tabs/windows)
     const handleStorageChange = (e) => {
@@ -173,9 +179,7 @@ function ClockInPage() {
               return {
                 ...emp,
                 clockIn: localStorageTimes[key].clockIn,
-                clockOut: localStorageTimes[key].clockOut,
-                absent: localStorageTimes[key].absent || false,
-                absentComment: localStorageTimes[key].absentComment || ""
+                clockOut: localStorageTimes[key].clockOut
               };
             }
             return emp;
@@ -198,9 +202,7 @@ function ClockInPage() {
             return {
               ...emp,
               clockIn: localStorageTimes[key].clockIn,
-              clockOut: localStorageTimes[key].clockOut,
-              absent: localStorageTimes[key].absent || false,
-              absentComment: localStorageTimes[key].absentComment || ""
+              clockOut: localStorageTimes[key].clockOut
             };
           }
           return emp;
@@ -218,9 +220,7 @@ function ClockInPage() {
           return {
             ...emp,
             clockIn: localStorageTimes[key].clockIn,
-            clockOut: localStorageTimes[key].clockOut,
-            absent: localStorageTimes[key].absent || false,
-            absentComment: localStorageTimes[key].absentComment || ""
+            clockOut: localStorageTimes[key].clockOut
           };
         }
         return emp;
@@ -234,6 +234,7 @@ function ClockInPage() {
 
     return () => {
       console.log('🔇 MANAGER VIEW: Removing event listeners');
+      clearInterval(updateInterval);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('worktimeUpdated', handleWorktimeUpdate);
       window.removeEventListener('worktime-changed', handleWorktimeChanged);
@@ -280,19 +281,16 @@ function ClockInPage() {
     loadSelectedShiftsForDate();
   }, [currentDate]);
 
-  // LOAD ALL SHIFTS FOR EACH EMPLOYEE - FIXED FOR MULTIPLE SHIFTS
+  // LOAD ALL SHIFTS FOR EACH EMPLOYEE
   useEffect(() => {
     const loadShifts = async () => {
       if (!currentDate || employees.length === 0) return;
 
       try {
-        // Get unique employee IDs from employees array
-        const uniqueEmpIds = [...new Set(employees.map(emp => emp.num))];
-        
-        const updatedShifts = await uniqueEmpIds.reduce(async (accPromise, empId) => {
+        const updatedShifts = await employees.reduce(async (accPromise, emp) => {
           const acc = await accPromise;
 
-          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${empId}/${currentDate}`); 
+          const res = await fetch(`${API_BASE_URL}/api/planning/employee-shifts-all/${emp.num}/${currentDate}`); 
           if (!res.ok) return acc;
           
           const data = await res.json(); 
@@ -301,7 +299,7 @@ function ClockInPage() {
             .map(shift => shift.shift_id ? shift.shift_id.toString() : null)
             .filter(id => id !== null);
 
-          acc[empId] = shiftIds;
+          acc[emp.num] = shiftIds;
 
           return acc;
         }, Promise.resolve({}));
@@ -322,10 +320,26 @@ function ClockInPage() {
     if (!name) return;
     try {
       const newEmployee = await employeesApi.addEmployee({ name });
+      setEmployees(prev => [
+        ...prev,
+        {
+          num: newEmployee.id,
+          FirstName: name,
+          LastName: '',
+          empNumber: newEmployee.id,
+          clockIn: "00:00",
+          clockOut: "00:00",
+          shift: 0,
+          delay: "00:00",
+          overtime: "00:00",
+          hours: "00:00"
+        }
+      ]);
+      alert(`Employee "${name}" added successfully!`);
       
-      // Don't automatically add to employees list - wait for planning
-      alert(`Employee "${name}" added successfully! Assign them to shifts in the planning.`);
-      
+      // Clear cache when new employee is added
+      const cacheKey = `employees_${currentDate}`;
+      localStorage.removeItem(cacheKey);
     } catch (err) {
       alert('Error adding employee: ' + err.message);
     }
@@ -335,10 +349,12 @@ function ClockInPage() {
   const handleEmployeeDeleted = async (employeeId) => {
     try {
       await employeesApi.deleteEmployee(employeeId);
-      // Remove all entries for this employee (all shifts)
       setEmployees(prev => prev.filter(emp => emp.num !== employeeId));
       alert("Employee deleted successfully!");
       
+      // Clear cache when employee is deleted
+      const cacheKey = `employees_${currentDate}`;
+      localStorage.removeItem(cacheKey);
     } catch (err) {
       alert('Error deleting employee: ' + err.message);
     }
@@ -379,7 +395,33 @@ function ClockInPage() {
   return (
     <>
       <Header />
-      <TextField label="Date" value={currentDate} readOnly />
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px' }}>
+        <label style={{ fontWeight: 500 }}>Date</label>
+        <input
+          type="date"
+          value={currentDate}
+          onChange={e => setCurrentDate(e.target.value)}
+          style={{
+            padding: '4px 8px',
+            borderRadius: 6,
+            border: '1px solid #ccc',
+            fontSize: 14,
+          }}
+        />
+        <button
+          onClick={() => setCurrentDate(getTodayDate())}
+          style={{
+            padding: '4px 12px',
+            borderRadius: 6,
+            border: '1px solid #ccc',
+            cursor: 'pointer',
+            fontSize: 14,
+          }}
+        >
+          Today
+        </button>
+      </div>
 
       <Content
         employees={employees}
