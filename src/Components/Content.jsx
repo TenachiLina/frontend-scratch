@@ -211,7 +211,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       [key]: updatedTimes
     }));
 
-    // ✅ Update the employee cache so refresh shows correct times
+    // Update cache
     const cacheKey = `employees_${currentDate}`;
     const cached = localStorage.getItem(cacheKey);
     if (cached) {
@@ -229,17 +229,15 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       }
     }
 
-    // ✅ Also update worktimeSync so other tabs get it
     saveWorktimeToLocalStorage(employee, currentDate, currentTab, updatedTimes.clockIn, updatedTimes.clockOut);
 
-    if (updatedTimes.clockIn && updatedTimes.clockOut &&
-      updatedTimes.clockIn !== "00:00" && updatedTimes.clockOut !== "00:00") {
+    // ✅ Save to DB if clockIn is valid (clockOut can still be 00:00)
+    if (updatedTimes.clockIn && updatedTimes.clockIn !== "00:00") {
       saveWorkTimeToDB(employee, updatedTimes.clockIn, updatedTimes.clockOut, updatedTimes.workTimeId || null);
     }
 
     setManualInput({ employee: null, type: null, value: "" });
   };
-
   const calculateLateMinutes = (clockIn, empId, shiftId) => {
     if (clockIn === "00:00") return 0;
 
