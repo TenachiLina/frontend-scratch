@@ -188,101 +188,53 @@ function ClockInOutUser() {
     loadShifts();
   }, [currentDate, employees]);
 
-  // ✅ FIXED: LOAD EXISTING CLOCK IN/OUT TIMES FROM DATABASE (includes clockIn/clockOut fields)
+  // FIX 1: Use correct route GET /api/worktime/date/:date (not /api/worktime/:emp/:date which doesn't exist)
+  // FIX 2: Backend returns snake_case — clock_in, clock_out, shift_id, absent_comment
+  const loadExistingTimes = async () => {
+    if (!currentDate || employees.length === 0) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/worktime/date/${currentDate}`);
+      if (!res.ok) return;
+      const records = await res.json();
+      if (!Array.isArray(records) || records.length === 0) return;
+
+      const times = {};
+      records.forEach(record => {
+        // snake_case from DB: emp_id, shift_id, clock_in, clock_out, absent_comment
+        const key = `${record.emp_id}-${record.shift_id}`;
+        times[key] = {
+          clockIn: record.clock_in?.slice(0, 5) || "00:00",
+          clockOut: record.clock_out?.slice(0, 5) || "00:00",
+          absent: record.absent === 1 || record.absent === true,
+          absentComment: record.absent_comment || ""
+        };
+      });
+
+      setEmployeeTimes(prev => ({ ...prev, ...times }));
+    } catch (err) {
+      console.error("Error loading existing times:", err);
+    }
+  };
+
   useEffect(() => {
-    const loadExistingTimes = async () => {
-      if (!currentDate || employees.length === 0) return;
-
-      try {
-        const times = {};
-
-        for (const emp of employees) {
-          try {
-            // Fetch from database first (source of truth)
-            const res = await fetch(
-              `${API_BASE_URL}/api/worktime/${emp.num}/${currentDate}`
-            );
-
-            if (res.ok) {
-              const data = await res.json();
-              const workTimeRecords = Array.isArray(data) ? data : [data];
-
-              workTimeRecords.forEach(record => {
-                if (record && record.shift) {
-                  const key = `${emp.num}-${record.shift}`;
-                  times[key] = {
-                    clockIn: record.clockIn || "00:00",
-                    clockOut: record.clockOut || "00:00",
-                    absent: record.absent === 1 || record.absent === true,
-                    absentComment: record.absentComment || ""
-                  };
-                }
-              });
-            }
-
-            // Then overlay localStorage (in case of unsaved pending state)
-            const localStorageKey = `worktime_${emp.num}_${currentDate}`;
-            for (let shiftId = 1; shiftId <= 10; shiftId++) {
-              const localKey = `${localStorageKey}_${shiftId}`;
-              const localData = localStorage.getItem(localKey);
-
-              if (localData) {
-                try {
-                  const parsed = JSON.parse(localData);
-                  const key = `${emp.num}-${shiftId}`;
-                  // Only override if localStorage has actual times (not placeholders)
-                  if (parsed.clockIn && parsed.clockIn !== "00:00") {
-                    times[key] = {
-                      ...times[key],
-                      clockIn: parsed.clockIn,
-                    };
-                  }
-                  if (parsed.clockOut && parsed.clockOut !== "00:00") {
-                    times[key] = {
-                      ...times[key],
-                      clockOut: parsed.clockOut,
-                    };
-                  }
-                } catch (e) {
-                  console.error('Error parsing localStorage data:', e);
-                }
-              }
-            }
-
-          } catch (err) {
-            console.error(`Error loading time for employee ${emp.num}:`, err);
-          }
-        }
-
-        setEmployeeTimes(times);
-      } catch (err) {
-        console.error("Error loading existing times:", err);
-      }
-    };
+    if (!currentDate || employees.length === 0) return;
 
     loadExistingTimes();
 
-    // Cross-tab sync via storage events
+    // Poll every 30s — picks up clock-ins made on another PC
+    const interval = setInterval(loadExistingTimes, 30000);
+
+    // Same-browser tab sync via storage events
     const handleStorageChange = (e) => {
-      if (e.key && e.key.startsWith('worktime_')) {
-        const localStorageTimes = loadAllWorktimeForDate(currentDate);
-        setEmployeeTimes(prev => ({ ...prev, ...localStorageTimes }));
-      }
+      if (e.key && e.key.startsWith('worktime_')) loadExistingTimes();
     };
-
-    const handleWorktimeUpdate = () => {
-      const localStorageTimes = loadAllWorktimeForDate(currentDate);
-      setEmployeeTimes(prev => ({ ...prev, ...localStorageTimes }));
-    };
-
     window.addEventListener('storage', handleStorageChange);
-    window.addEventListener('worktimeUpdated', handleWorktimeUpdate);
-    window.addEventListener('worktime-changed', handleWorktimeUpdate);
+    window.addEventListener('worktime-changed', loadExistingTimes);
 
     return () => {
+      clearInterval(interval);
       window.removeEventListener('storage', handleStorageChange);
-      window.removeEventListener('worktimeUpdated', handleWorktimeUpdate);
-      window.removeEventListener('worktime-changed', handleWorktimeUpdate);
+      window.removeEventListener('worktime-changed', loadExistingTimes);
     };
   }, [currentDate, employees]);
 

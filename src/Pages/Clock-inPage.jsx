@@ -129,7 +129,9 @@ function ClockInPage() {
             clockIn: dbRecord?.clock_in?.slice(0, 5) || "00:00",
             clockOut: dbRecord?.clock_out?.slice(0, 5) || "00:00",
             absent: dbRecord?.absent == 1 || false,
-            absentComment: dbRecord?.absent_comment || ""
+            absentComment: dbRecord?.absent_comment || "",
+            consomation: dbRecord?.consomation ?? 0,
+            penalty: dbRecord?.penalty ?? 0
           };
         });
 
