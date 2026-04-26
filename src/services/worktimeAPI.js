@@ -40,7 +40,8 @@ export const worktimeApi = {
 
   async getWorkTimesByDate(date) {
     const response = await fetch(`${API_BASE_URL}/api/worktime/date/${date}`);
-    if (!response.ok) throw new Error('Failed to fetch work times by date');
+    if (response.status === 404) return [];
+    if (!response.ok) return [];
     return await response.json();
   },
 

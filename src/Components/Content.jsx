@@ -1,11 +1,11 @@
-import { useState, useEffect } from "react"; 
+import React, { useState, useEffect } from "react";
 import { worktimeApi } from "../services/worktimeAPI";
 import { shiftApi } from "../services/shfitAPI.js";
 import { planningApi } from "../services/planningAPI";
 import { API_BASE_URL } from "../services/config";
-import { 
-  saveWorktimeToLocalStorage, 
-  clearEmployeeCache 
+import {
+  saveWorktimeToLocalStorage,
+  clearEmployeeCache
 } from "../services/worktimeSync";
 
 export default function Content({ employees, selectedShifts, selectedShiftsForDate, setSelectedShifts, onEmployeeDeleted, currentDate }) {
@@ -48,6 +48,13 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   const [employeeTimes, setEmployeeTimes] = useState({});
 
   const [customShiftTimes, setCustomShiftTimes] = useState({});
+  const [savedToast, setSavedToast] = useState(null); // { empNum, field }
+  const absentCommentTimer = React.useRef({});
+
+  const showSavedFeedback = (empNum, field) => {
+    setSavedToast({ empNum, field });
+    setTimeout(() => setSavedToast(null), 2000);
+  };
 
   const isAbsent = (empNum) => {
     const key = getEmployeeShiftKey(empNum, currentTab);
@@ -67,20 +74,21 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
         if (!shiftId) return;
 
         const key = `${emp.num}-${shiftId}`;
-        
+
         // Merge: clockIn/clockOut/absent from props, other fields from previous state or localStorage
         // If we have a recent local change (within 2 seconds), keep it instead of overwriting
         const existingTime = prev[key];
         const timeSinceUpdate = existingTime?._lastUpdate ? (Date.now() - existingTime._lastUpdate) : Infinity;
-        
+
         updatedTimes[key] = {
           clockIn: (timeSinceUpdate < 2000 ? existingTime?.clockIn : emp.clockIn) || "00:00",
           clockOut: (timeSinceUpdate < 2000 ? existingTime?.clockOut : emp.clockOut) || "00:00",
           absent: (timeSinceUpdate < 2000 ? existingTime?.absent : emp.absent) || false,
           absentComment: (timeSinceUpdate < 2000 ? existingTime?.absentComment : emp.absentComment) || "",
           workTimeId: prev[key]?.workTimeId || null,
-          consomation: prev[key]?.consomation || savedTimes[key]?.consomation || 0,
-          penalty: prev[key]?.penalty || savedTimes[key]?.penalty || 0,
+          // Read from DB (via emp props) first, fall back to unsaved local state
+          consomation: (timeSinceUpdate < 2000 ? existingTime?.consomation : null) ?? emp.consomation ?? savedTimes[key]?.consomation ?? 0,
+          penalty: (timeSinceUpdate < 2000 ? existingTime?.penalty : null) ?? emp.penalty ?? savedTimes[key]?.penalty ?? 0,
           _lastUpdate: existingTime?._lastUpdate
         };
       });
@@ -121,7 +129,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
 
       try {
         const planningData = await planningApi.getPlanning(currentDate);
-        
+
         const customTimes = {};
         planningData.forEach(assignment => {
           if (assignment.custom_start_time || assignment.custom_end_time) {
@@ -211,14 +219,33 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       [key]: updatedTimes
     }));
 
-    if (updatedTimes.clockIn && updatedTimes.clockOut && 
-        updatedTimes.clockIn !== "00:00" && updatedTimes.clockOut !== "00:00") {
+    // Update cache
+    const cacheKey = `employees_${currentDate}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        const updated = parsed.map(emp => {
+          if (String(emp.num) === String(employee) && String(emp.shift) === String(currentTab)) {
+            return { ...emp, [type]: value };
+          }
+          return emp;
+        });
+        localStorage.setItem(cacheKey, JSON.stringify(updated));
+      } catch (e) {
+        console.error('Failed to update cache:', e);
+      }
+    }
+
+    saveWorktimeToLocalStorage(employee, currentDate, currentTab, updatedTimes.clockIn, updatedTimes.clockOut);
+
+    // ✅ Save to DB if clockIn is valid (clockOut can still be 00:00)
+    if (updatedTimes.clockIn && updatedTimes.clockIn !== "00:00") {
       saveWorkTimeToDB(employee, updatedTimes.clockIn, updatedTimes.clockOut, updatedTimes.workTimeId || null);
     }
 
     setManualInput({ employee: null, type: null, value: "" });
   };
-
   const calculateLateMinutes = (clockIn, empId, shiftId) => {
     if (clockIn === "00:00") return 0;
 
@@ -254,7 +281,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
     let shiftEndM = toMinutes(effectiveEndTime);
 
     if (shiftEndM === 0) shiftEndM = 24 * 60;
-    
+
     if (shiftEndM === 24 * 60 && clockOutM < 12 * 60) {
       clockOutM += 24 * 60;
     }
@@ -313,12 +340,14 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       const lateMinutes = calculateLateMinutes(clockIn, employeeNum, shiftNumber);
       const overtimeMinutes = calculateOvertimeMinutes(clockOut, employeeNum, shiftNumber);
       const timeOfWork = calculateHours(clockIn, clockOut);
-      
+
       const key = getEmployeeShiftKey(employeeNum, currentTab);
 
       const workTimeData = {
         employeeId: employeeNum,
         date: currentDate,
+        clockIn: clockIn,
+        clockOut: clockOut,
         timeOfWork: timeOfWork,
         shift: shiftNumber || 0,
         delay: formatMinutesToTime(lateMinutes),
@@ -334,11 +363,11 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
       setEmployeeTimes(prev => ({
         ...prev,
         [key]: {
-          ...prev[key], 
+          ...prev[key],
           workTimeId: savedWorkTime.id
         }
       }));
-      
+
       console.log('Work time saved successfully:', savedWorkTime);
       return savedWorkTime;
     } catch (error) {
@@ -350,7 +379,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   const handleClockIn = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
-    
+
     const updatedTimes = {
       ...employeeTimes[key],
       clockIn: currentTime,
@@ -376,7 +405,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
   const handleClockOut = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
-    
+
     const updatedTimes = {
       ...employeeTimes[key],
       clockOut: currentTime,
@@ -457,16 +486,16 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
     return formatMinutesToTime(overtimeMinutes);
   };
 
-  if (!currentTab) { 
-    return <div>There is no planning yet</div>; 
+  if (!currentTab) {
+    return <div>There is no planning yet</div>;
   }
 
   return (
     <>
       {(!shifts.length || currentTab === null) ? (
         <div>Loading shifts...</div>
-      ) : ( 
-        <>  
+      ) : (
+        <>
           <div
             style={{
               display: "flex",
@@ -517,8 +546,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                   <th>Delay</th>
                   <th>Overtime</th>
                   <th>Hours</th>
-                  <th>Absent?</th>
-                  <th>Reason</th>
+                  <th colSpan={2}>Absent</th>
                 </tr>
               </thead>
               <tbody>
@@ -535,15 +563,15 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                     const currentClockOut = getEmployeeTime(emp.num, 'clockOut', currentTab);
                     const currentDelay = getDisplayDelay(emp.num);
                     const currentOvertime = getDisplayOvertime(emp.num);
-                    
+
                     const effectiveStartTime = getEffectiveShiftTime(emp.num, currentTab, 'custom_start_time');
                     const effectiveEndTime = getEffectiveShiftTime(emp.num, currentTab, 'custom_end_time');
                     const customStart = getCustomShiftTime(emp.num, currentTab, 'custom_start_time');
                     const customEnd = getCustomShiftTime(emp.num, currentTab, 'custom_end_time');
                     const hasCustomTime = customStart || customEnd;
-                    
+
                     return (
-                      <tr 
+                      <tr
                         key={`${emp.num}-${currentTab}`}
                         style={{
                           backgroundColor: employeeTimes[key]?.absent ? '#f8f9fa' : 'transparent',
@@ -554,9 +582,9 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                         <td>
                           <div>{emp.FirstName} - {emp.empNumber}</div>
                           {hasCustomTime && (
-                            <div style={{ 
-                              fontSize: '11px', 
-                              color: '#EB4219', 
+                            <div style={{
+                              fontSize: '11px',
+                              color: '#EB4219',
                               fontStyle: 'italic',
                               marginTop: '4px',
                               fontWeight: 'bold'
@@ -651,108 +679,231 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
                         </td>
 
                         <td>
-                          <input
-                            type="number"
-                            value={employeeTimes[key]?.consomation || ""}
-                            onChange={(e) =>
-                              setEmployeeTimes((prev) => ({
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  consomation: e.target.value,
-                                },
-                              }))
-                            }
-                            style={{ width: "80px" }}
-                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="number"
+                              value={employeeTimes[key]?.consomation || ""}
+                              onChange={(e) =>
+                                setEmployeeTimes((prev) => ({
+                                  ...prev,
+                                  [key]: {
+                                    ...prev[key],
+                                    consomation: e.target.value,
+                                  },
+                                }))
+                              }
+                              onBlur={() => {
+                                saveWorkTimeToDB(emp.num, currentClockIn, currentClockOut);
+                                showSavedFeedback(emp.num, 'consomation');
+                              }}
+                              style={{
+                                width: "80px",
+                                outline: savedToast?.empNum === emp.num && savedToast?.field === 'consomation' ? '2px solid #28a745' : undefined,
+                                borderRadius: '4px',
+                                transition: 'outline 0.3s'
+                              }}
+                            />
+                            {savedToast?.empNum === emp.num && savedToast?.field === 'consomation' && (
+                              <span style={{ fontSize: '16px', color: '#28a745', lineHeight: 1 }}>✓</span>
+                            )}
+                          </div>
                         </td>
 
                         <td>
-                          <input
-                            type="number"
-                            value={employeeTimes[key]?.penalty || ""}
-                            onChange={(e) =>
-                              setEmployeeTimes((prev) => ({
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  penalty: e.target.value,
-                                },
-                              }))
-                            }
-                            style={{ width: "80px" }}
-                          />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                            <input
+                              type="number"
+                              value={employeeTimes[key]?.penalty || ""}
+                              onChange={(e) =>
+                                setEmployeeTimes((prev) => ({
+                                  ...prev,
+                                  [key]: {
+                                    ...prev[key],
+                                    penalty: e.target.value,
+                                  },
+                                }))
+                              }
+                              onBlur={() => {
+                                saveWorkTimeToDB(emp.num, currentClockIn, currentClockOut);
+                                showSavedFeedback(emp.num, 'penalty');
+                              }}
+                              style={{
+                                width: "80px",
+                                outline: savedToast?.empNum === emp.num && savedToast?.field === 'penalty' ? '2px solid #28a745' : undefined,
+                                borderRadius: '4px',
+                                transition: 'outline 0.3s'
+                              }}
+                            />
+                            {savedToast?.empNum === emp.num && savedToast?.field === 'penalty' && (
+                              <span style={{ fontSize: '16px', color: '#28a745', lineHeight: 1 }}>✓</span>
+                            )}
+                          </div>
                         </td>
-                         
+
                         <td>{currentDelay}</td>
                         <td>{currentOvertime}</td>
                         <td>{calculateHours(currentClockIn, currentClockOut)}</td>
-                        
-                        <td>
-                          <input 
-                            type="checkbox"
-                            checked={employeeTimes[key]?.absent || false}
-                            onChange={(e) => {
-                              const isAbsent = e.target.checked;
-                              setEmployeeTimes(prev => ({
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  absent: isAbsent,
-                                  clockIn: isAbsent ? "00:00" : prev[key]?.clockIn || "00:00",
-                                  clockOut: isAbsent ? "00:00" : prev[key]?.clockOut || "00:00",
-                                  _lastUpdate: Date.now()
-                                }
-                              }));
-                              
-                              // Save absent status to worktimeSync
-                              const currentTimes = employeeTimes[key] || {};
-                              saveWorktimeToLocalStorage(
-                                emp.num, 
-                                currentDate, 
-                                currentTab, 
-                                isAbsent ? "00:00" : currentTimes.clockIn || "00:00",
-                                isAbsent ? "00:00" : currentTimes.clockOut || "00:00",
-                                isAbsent,
-                                currentTimes.absentComment || ""
-                              );
-                            }}
-                          />
-                        </td>
 
-                        <td>
-                          <input
-                            type="text"
-                            value={employeeTimes[key]?.absentComment || ""}
-                            disabled={!employeeTimes[key]?.absent}
-                            placeholder="Reason"
-                            onChange={(e) =>
-                              setEmployeeTimes(prev => ({
-                                ...prev,
-                                [key]: {
-                                  ...prev[key],
-                                  absentComment: e.target.value
-                                }
-                              }))
-                            }
-                            onBlur={(e) => {
-                              if (employeeTimes[key]?.absent && e.target.value.trim()) {
-                                saveWorkTimeToDB(emp.num, "00:00", "00:00");
-                                
-                                // Update worktimeSync with comment
-                                saveWorktimeToLocalStorage(
-                                  emp.num,
-                                  currentDate,
-                                  currentTab,
-                                  "00:00",
-                                  "00:00",
-                                  true,
-                                  e.target.value
-                                );
-                              }
-                            }}
-                            style={{ width: "150px" }}
-                          />
+                        <td colSpan={2}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+
+                            {!employeeTimes[key]?.absent ? (
+                              /* Not absent — show red outline "Absent?" button */
+                              <button
+                                onClick={() => {
+                                  const currentTimes = employeeTimes[key] || {};
+                                  setEmployeeTimes(prev => ({
+                                    ...prev,
+                                    [key]: {
+                                      ...prev[key],
+                                      absent: true,
+                                      clockIn: "00:00",
+                                      clockOut: "00:00",
+                                      _lastUpdate: Date.now()
+                                    }
+                                  }));
+                                  const workTimeData = {
+                                    employeeId: emp.num,
+                                    date: currentDate,
+                                    clockIn: "00:00",
+                                    clockOut: "00:00",
+                                    timeOfWork: "00:00",
+                                    shift: currentTab || 0,
+                                    delay: "00:00",
+                                    overtime: "00:00",
+                                    consomation: currentTimes.consomation || 0,
+                                    penalty: currentTimes.penalty || 0,
+                                    absent: 1,
+                                    absentComment: ""
+                                  };
+                                  worktimeApi.saveWorkTime(workTimeData).then(() => {
+                                    showSavedFeedback(emp.num, 'absent');
+                                    saveWorktimeToLocalStorage(emp.num, currentDate, currentTab, "00:00", "00:00", true, "");
+                                  });
+                                }}
+                                style={{
+                                  padding: '5px 14px',
+                                  borderRadius: '20px',
+                                  border: '1.5px solid #E24B4A',
+                                  background: 'transparent',
+                                  color: '#A32D2D',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500',
+                                  whiteSpace: 'nowrap'
+                                }}
+                              >
+                                Absent?
+                              </button>
+                            ) : (
+                              /* Absent — show filled red badge + reason input + cancel button */
+                              <>
+                                {/* <span style={{
+                                  padding: '5px 14px',
+                                  borderRadius: '20px',
+                                  border: '1.5px solid #E24B4A',
+                                  background: 'transparent',
+                                  color: '#A32D2D',
+                                  cursor: 'pointer',
+                                  fontSize: '13px',
+                                  fontWeight: '500',
+                                  whiteSpace: 'nowrap'
+                                }}>
+                                  Absent
+                                </span> */}
+
+                                <input
+                                  type="text"
+                                  value={employeeTimes[key]?.absentComment || ""}
+                                  placeholder="Reason (optional)"
+                                  onChange={(e) => {
+                                    const comment = e.target.value;
+                                    setEmployeeTimes(prev => ({
+                                      ...prev,
+                                      [key]: { ...prev[key], absentComment: comment }
+                                    }));
+                                    clearTimeout(absentCommentTimer.current[key]);
+                                    absentCommentTimer.current[key] = setTimeout(() => {
+                                      const workTimeData = {
+                                        employeeId: emp.num,
+                                        date: currentDate,
+                                        clockIn: "00:00",
+                                        clockOut: "00:00",
+                                        timeOfWork: "00:00",
+                                        shift: currentTab || 0,
+                                        delay: "00:00",
+                                        overtime: "00:00",
+                                        consomation: employeeTimes[key]?.consomation || 0,
+                                        penalty: employeeTimes[key]?.penalty || 0,
+                                        absent: 1,
+                                        absentComment: comment
+                                      };
+                                      worktimeApi.saveWorkTime(workTimeData).then(() => {
+                                        showSavedFeedback(emp.num, 'absent');
+                                        saveWorktimeToLocalStorage(emp.num, currentDate, currentTab, "00:00", "00:00", true, comment);
+                                      });
+                                    }, 800);
+                                  }}
+                                  style={{
+                                    width: '130px',
+                                    padding: '4px 8px',
+                                    borderRadius: '4px',
+                                    border: '1px solid #ced4da',
+                                    fontSize: '12px'
+                                  }}
+                                />
+
+                                {/* Cancel button — clearly undoes the absent mark */}
+                                <button
+                                  onClick={() => {
+                                    const currentTimes = employeeTimes[key] || {};
+                                    setEmployeeTimes(prev => ({
+                                      ...prev,
+                                      [key]: {
+                                        ...prev[key],
+                                        absent: false,
+                                        absentComment: "",
+                                        _lastUpdate: Date.now()
+                                      }
+                                    }));
+                                    const workTimeData = {
+                                      employeeId: emp.num,
+                                      date: currentDate,
+                                      clockIn: "00:00",
+                                      clockOut: "00:00",
+                                      timeOfWork: "00:00",
+                                      shift: currentTab || 0,
+                                      delay: "00:00",
+                                      overtime: "00:00",
+                                      consomation: currentTimes.consomation || 0,
+                                      penalty: currentTimes.penalty || 0,
+                                      absent: 0,
+                                      absentComment: ""
+                                    };
+                                    worktimeApi.saveWorkTime(workTimeData).then(() => {
+                                      saveWorktimeToLocalStorage(emp.num, currentDate, currentTab, "00:00", "00:00", false, "");
+                                    });
+                                  }}
+                                  style={{
+                                    padding: '5px 10px',
+                                    borderRadius: '20px',
+                                    border: '1.5px solid #ced4da',
+                                    background: 'transparent',
+                                    color: '#6c757d',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    whiteSpace: 'nowrap'
+                                  }}
+                                >
+                                  ✕ Cancel
+                                </button>
+                              </>
+                            )}
+
+                            {savedToast?.empNum === emp.num && savedToast?.field === 'absent' && (
+                              <span style={{ fontSize: '14px', color: '#28a745' }}>✓</span>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     );
@@ -761,7 +912,7 @@ export default function Content({ employees, selectedShifts, selectedShiftsForDa
               </tbody>
             </table>
           </div>
-          
+
           {manualInput.employee && (
             <div
               style={{
