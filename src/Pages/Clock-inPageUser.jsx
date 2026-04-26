@@ -188,8 +188,6 @@ function ClockInOutUser() {
     loadShifts();
   }, [currentDate, employees]);
 
-  // FIX 1: Use correct route GET /api/worktime/date/:date (not /api/worktime/:emp/:date which doesn't exist)
-  // FIX 2: Backend returns snake_case — clock_in, clock_out, shift_id, absent_comment
   const loadExistingTimes = async () => {
     if (!currentDate || employees.length === 0) return;
     try {
@@ -200,13 +198,14 @@ function ClockInOutUser() {
 
       const times = {};
       records.forEach(record => {
-        // snake_case from DB: emp_id, shift_id, clock_in, clock_out, absent_comment
         const key = `${record.emp_id}-${record.shift_id}`;
         times[key] = {
           clockIn: record.clock_in?.slice(0, 5) || "00:00",
           clockOut: record.clock_out?.slice(0, 5) || "00:00",
           absent: record.absent === 1 || record.absent === true,
-          absentComment: record.absent_comment || ""
+          absentComment: record.absent_comment || "",
+          consomation: record.consomation ?? 0,
+          penalty: record.penalty ?? 0,
         };
       });
 
@@ -221,7 +220,7 @@ function ClockInOutUser() {
 
     loadExistingTimes();
 
-    // Poll every 30s — picks up clock-ins made on another PC
+    // Poll every 30s — picks up changes made on another PC (e.g. admin entering consomation/penalty)
     const interval = setInterval(loadExistingTimes, 30000);
 
     // Same-browser tab sync via storage events
@@ -338,7 +337,31 @@ function ClockInOutUser() {
     return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
   };
 
-  // ✅ FIXED: CLOCK IN - now includes clockIn field in DB payload
+  // ✅ Helper: fetch the latest consomation/penalty/absent from DB for a specific employee+shift
+  // so we never overwrite admin-entered values when saving a clock-in or clock-out.
+  const fetchFreshAdminValues = async (empNum, shiftId) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/worktime/date/${currentDate}`);
+      if (!res.ok) return null;
+      const records = await res.json();
+      if (!Array.isArray(records)) return null;
+      const record = records.find(
+        r => String(r.emp_id) === String(empNum) && String(r.shift_id) === String(shiftId)
+      );
+      if (!record) return null;
+      return {
+        consomation: record.consomation ?? 0,
+        penalty: record.penalty ?? 0,
+        absent: record.absent ?? 0,
+        absentComment: record.absent_comment || "",
+      };
+    } catch (err) {
+      console.warn('Could not fetch fresh admin values, will use local state:', err);
+      return null;
+    }
+  };
+
+  // CLOCK IN
   const handleClockIn = async (emp) => {
     try {
       const clockInTime = getCurrentTime();
@@ -364,7 +387,29 @@ function ClockInOutUser() {
       const effectiveStartTime = customTimes?.start_time || shiftDetails.start_time;
       const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
 
-      // ✅ Include clockIn in payload
+      // ✅ FIX: Fetch latest admin-entered values from DB before saving
+      const freshAdminValues = await fetchFreshAdminValues(emp.num, shiftDetails.shift_id);
+      const localKey = employeeTimes[key];
+
+      const consomation = freshAdminValues?.consomation ?? localKey?.consomation ?? 0;
+      const penalty = freshAdminValues?.penalty ?? localKey?.penalty ?? 0;
+      const absent = freshAdminValues?.absent ?? (localKey?.absent ? 1 : 0);
+      const absentComment = freshAdminValues?.absentComment ?? localKey?.absentComment ?? "";
+
+      // Sync fresh values back into local state so UI stays accurate
+      if (freshAdminValues) {
+        setEmployeeTimes(prev => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            consomation,
+            penalty,
+            absent: absent === 1 || absent === true,
+            absentComment,
+          }
+        }));
+      }
+
       const workTimeData = {
         employeeId: emp.num,
         date: currentDate,
@@ -374,10 +419,10 @@ function ClockInOutUser() {
         shift: shiftDetails.shift_id,
         delay: formatMinutesToTime(lateMinutes),
         overtime: "00:00",
-        consomation: 0,
-        penalty: 0,
-        absent: 0,
-        absentComment: ""
+        consomation,   // ✅ from DB, not hardcoded 0
+        penalty,       // ✅ from DB, not hardcoded 0
+        absent,
+        absentComment
       };
 
       await worktimeApi.saveWorkTime(workTimeData);
@@ -399,7 +444,7 @@ function ClockInOutUser() {
     }
   };
 
-  // ✅ FIXED: CLOCK OUT - now includes both clockIn and clockOut in DB payload
+  // CLOCK OUT
   const handleClockOut = async (emp) => {
     try {
       const clockOutTime = getCurrentTime();
@@ -432,7 +477,29 @@ function ClockInOutUser() {
       const overtimeMinutes = calculateOvertimeMinutes(clockOutTime, effectiveEndTime);
       const lateMinutes = calculateLateMinutes(clockInTime, effectiveStartTime);
 
-      // ✅ Include both clockIn and clockOut in payload
+      // ✅ FIX: Fetch latest admin-entered values from DB before saving
+      const freshAdminValues = await fetchFreshAdminValues(emp.num, shiftDetails.shift_id);
+      const localKey = employeeTimes[key];
+
+      const consomation = freshAdminValues?.consomation ?? localKey?.consomation ?? 0;
+      const penalty = freshAdminValues?.penalty ?? localKey?.penalty ?? 0;
+      const absent = freshAdminValues?.absent ?? (localKey?.absent ? 1 : 0);
+      const absentComment = freshAdminValues?.absentComment ?? localKey?.absentComment ?? "";
+
+      // Sync fresh values back into local state so UI stays accurate
+      if (freshAdminValues) {
+        setEmployeeTimes(prev => ({
+          ...prev,
+          [key]: {
+            ...prev[key],
+            consomation,
+            penalty,
+            absent: absent === 1 || absent === true,
+            absentComment,
+          }
+        }));
+      }
+
       const workTimeData = {
         employeeId: emp.num,
         date: currentDate,
@@ -442,10 +509,10 @@ function ClockInOutUser() {
         shift: shiftDetails.shift_id,
         delay: formatMinutesToTime(lateMinutes),
         overtime: formatMinutesToTime(overtimeMinutes),
-        consomation: 0,
-        penalty: 0,
-        absent: 0,
-        absentComment: ""
+        consomation,   // ✅ from DB, not hardcoded 0
+        penalty,       // ✅ from DB, not hardcoded 0
+        absent,
+        absentComment
       };
 
       await worktimeApi.saveWorkTime(workTimeData);
@@ -467,7 +534,7 @@ function ClockInOutUser() {
     }
   };
 
-  // ✅ BUTTON STYLES + show recorded time on button label
+  // BUTTON STYLES + show recorded time on button label
   const getClockInButtonStyle = (emp) => {
     const key = `${emp.num}-${currentTab}`;
     const clockIn = employeeTimes[key]?.clockIn;
@@ -589,7 +656,6 @@ function ClockInOutUser() {
                   filteredEmployees.map((emp) => {
                     const key = `${emp.num}-${currentTab}`;
                     const isAbsent = employeeTimes[key]?.absent || false;
-                    // ✅ Read actual times from state (loaded from DB on mount)
                     const clockIn = employeeTimes[key]?.clockIn || "00:00";
                     const clockOut = employeeTimes[key]?.clockOut || "00:00";
 

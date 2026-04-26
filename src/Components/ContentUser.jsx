@@ -43,7 +43,6 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     return savedTimes;
   });
 
-  // ✅ FIXED: Load existing clock times from DB when employees/shifts/date are ready
   const getCurrentDate = () => {
     const now = new Date();
     return now.toISOString().split('T')[0];
@@ -327,6 +326,8 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     return `${hours}:${minutes}`;
   };
 
+  // ✅ FIXED: Always fetch latest consomation/penalty/absent from DB before saving,
+  // so admin-entered values are never overwritten by stale local state.
   const saveWorkTimeToDB = async (employeeNum, clockIn, clockOut) => {
     try {
       const shiftNumber = currentTab;
@@ -334,6 +335,43 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
       const overtimeMinutes = calculateOvertimeMinutes(clockOut, shiftNumber);
       const timeOfWork = calculateHours(clockIn, clockOut);
       const key = getEmployeeShiftKey(employeeNum, currentTab);
+
+      // Start with whatever is in local state as fallback
+      let freshConsomation = employeeTimes[key]?.consomation || 0;
+      let freshPenalty = employeeTimes[key]?.penalty || 0;
+      let freshAbsent = employeeTimes[key]?.absent ? 1 : 0;
+      let freshAbsentComment = employeeTimes[key]?.absentComment || "";
+
+      // Fetch the latest record from DB to get admin-entered values
+      try {
+        const currentDate = getCurrentDate();
+        const res = await fetch(`${API_BASE_URL}/api/worktime/${employeeNum}/${currentDate}`);
+        if (res.ok) {
+          const data = await res.json();
+          const records = Array.isArray(data) ? data : [data];
+          const record = records.find(r => String(r.shift) === String(shiftNumber));
+          if (record) {
+            freshConsomation = record.consomation ?? freshConsomation;
+            freshPenalty = record.penalty ?? freshPenalty;
+            freshAbsent = record.absent ?? freshAbsent;
+            freshAbsentComment = record.absentComment ?? freshAbsentComment;
+
+            // Sync fresh DB values back into local state so UI stays accurate
+            setEmployeeTimes(prev => ({
+              ...prev,
+              [key]: {
+                ...prev[key],
+                consomation: freshConsomation,
+                penalty: freshPenalty,
+                absent: freshAbsent === 1 || freshAbsent === true,
+                absentComment: freshAbsentComment,
+              }
+            }));
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Could not fetch latest DB values before save, using local state:', fetchErr);
+      }
 
       const workTimeData = {
         employeeId: employeeNum,
@@ -345,10 +383,10 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
         delay: formatMinutesToTime(lateMinutes),
         overtime: formatMinutesToTime(overtimeMinutes),
         late_minutes: lateMinutes,
-        consomation: employeeTimes[key]?.consomation || 0,
-        penalty: employeeTimes[key]?.penalty || 0,
-        absent: employeeTimes[key]?.absent ? 1 : 0,
-        absentComment: employeeTimes[key]?.absentComment || ""
+        consomation: freshConsomation,     // ✅ from DB, not stale local state
+        penalty: freshPenalty,             // ✅ from DB, not stale local state
+        absent: freshAbsent,
+        absentComment: freshAbsentComment
       };
 
       const savedWorkTime = await worktimeApi.saveWorkTime(workTimeData);
@@ -365,7 +403,6 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     }
   };
 
-  // ✅ FIXED: Clock In saves clockIn to DB immediately
   const handleClockIn = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
@@ -384,7 +421,6 @@ export default function Content({ employees, selectedShifts, setSelectedShifts, 
     saveWorkTimeToDB(employeeNum, currentTime, updatedTimes.clockOut || "00:00");
   };
 
-  // ✅ FIXED: Clock Out saves both clockIn and clockOut to DB
   const handleClockOut = (employeeNum) => {
     const currentTime = getCurrentTime();
     const key = getEmployeeShiftKey(employeeNum, currentTab);
